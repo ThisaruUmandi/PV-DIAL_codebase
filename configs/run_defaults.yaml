@@ -1,0 +1,16 @@
+# PV-DIALS run defaults. Every value here is written into provenance.
+# Values marked PROVISIONAL must not be treated as settled.
+
+versions:
+  pvlib: "0.15.2"        # Must match the installed version
+
+site_demo:               # For demostration only. Not used in production.
+  latitude: 6.026
+  longitude: 80.216
+
+solar_position:
+  method: "nrel_numpy"   # Computed once, shared by all pipelines
+
+dla:
+  tau: 0.05              # PROVISIONAL — justified by sensitivity analysis (A18)
+  daylight_mask_zenith_deg: null   # to be set in Step 3 (mask from solar position only)
