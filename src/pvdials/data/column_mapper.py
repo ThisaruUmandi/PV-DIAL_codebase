@@ -9,6 +9,7 @@ as new uploaded files reveal new naming conventions — it is not exhaustive.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 import pandas as pd
@@ -19,9 +20,24 @@ KNOWN_ALIASES: dict[str, list[str]] = {
     "ghi": ["ghi", "g(h)", "global horizontal irradiance"],
     "temp_air": ["t2m", "temp_air", "temperature", "air temperature"],
     "wind_speed": ["ws10m", "wind_speed", "wind speed"],
+    # Optional fields. RH is range-checked if present. Supplied DNI/DHI are
+    # detected only so preprocessing can drop them as a recorded step.
+    "rh": ["rh", "rh2m", "relative_humidity", "relative humidity"],
+    "dni": ["gb(n)", "dni"],
+    "dhi": ["gd(h)", "dhi"],
 }
 
 REQUIRED_FIELDS = ["timestamp", "ghi", "temp_air", "wind_speed"]
+
+# Site fields: read from the file if present, otherwise entered by the user.
+SITE_ALIASES: dict[str, list[str]] = {
+    "latitude": ["latitude", "lat"],
+    "longitude": ["longitude", "lon", "lng"],
+    "elevation": ["elevation", "elev", "altitude"],
+}
+
+FROM_CSV = "From CSV"
+USER_ENTERED = "User entered"
 
 
 @dataclass
@@ -56,3 +72,76 @@ def detect_columns(df: pd.DataFrame) -> ColumnMapping:
             mapping.missing.append(canonical)
 
     return mapping
+
+@dataclass
+class SiteMetadata:
+    """Latitude, longitude and elevation, each tagged with where it came from.
+
+    values: site field -> value
+    sources: site field -> FROM_CSV or USER_ENTERED
+    missing: site fields the user must enter
+    """
+
+    values: dict[str, float] = field(default_factory=dict)
+    sources: dict[str, str] = field(default_factory=dict)
+    missing: list[str] = field(default_factory=list)
+
+    def set_user_value(self, site_field: str, value: float) -> None:
+        if site_field not in SITE_ALIASES:
+            raise ValueError(f"Unknown site field: {site_field}")
+        self.values[site_field] = float(value)
+        self.sources[site_field] = USER_ENTERED
+        if site_field in self.missing:
+            self.missing.remove(site_field)
+
+    def is_complete(self) -> bool:
+        return not self.missing
+
+
+def _normalise_key(text: str) -> str:
+    """'Latitude (decimal degrees)' -> 'latitude'."""
+    return re.sub(r"\(.*?\)", "", text).strip().lower()
+
+
+def _from_preamble(preamble: list[str], aliases: list[str]) -> float | None:
+    """Value from a 'key: value' line whose key matches an alias."""
+    for line in preamble:
+        key, sep, value = line.partition(":")
+        if sep and _normalise_key(key) in aliases:
+            try:
+                return float(value.strip())
+            except ValueError:
+                return None
+    return None
+
+
+def _from_columns(df: pd.DataFrame, aliases: list[str]) -> float | None:
+    """Value from a matching column, only if it holds one constant value."""
+    for col in df.columns:
+        if _normalise_key(str(col)) in aliases:
+            unique = df[col].dropna().unique()
+            if len(unique) == 1:
+                try:
+                    return float(unique[0])
+                except (TypeError, ValueError):
+                    return None
+    return None
+
+
+def detect_site_metadata(preamble: list[str], df: pd.DataFrame) -> SiteMetadata:
+    """Find latitude, longitude and elevation in the uploaded file.
+
+    Looks in the preamble lines first, then in data columns. Anything not
+    found is listed in `missing` for the user to enter. No site is hard-coded.
+    """
+    site = SiteMetadata()
+    for site_field, aliases in SITE_ALIASES.items():
+        value = _from_preamble(preamble, aliases)
+        if value is None:
+            value = _from_columns(df, aliases)
+        if value is None:
+            site.missing.append(site_field)
+        else:
+            site.values[site_field] = value
+            site.sources[site_field] = FROM_CSV
+    return site

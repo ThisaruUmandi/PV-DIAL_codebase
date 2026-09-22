@@ -1,0 +1,34 @@
+Latitude (decimal degrees): 6.944
+Longitude (decimal degrees): 79.856
+Elevation (m): 16.0
+Irradiance Time Offset (h): 0.5
+month,year
+1,2005
+2,2019
+3,2008
+4,2007
+5,2013
+6,2011
+7,2013
+8,2013
+9,2016
+10,2008
+11,2020
+12,2014
+time(UTC),T2m,RH,G(h),Gb(n),Gd(h),IR(h),WS10m,WD10m,SP
+20190228:2200,24.5,88.1,0.0,-0.0,0.0,410.2,1.8,40.0,101050.0
+20190228:2300,24.3,88.9,0.0,0.0,0.0,409.8,1.6,38.0,101060.0
+20080301:0000,24.8,87.5,0.0,-0.0,0.0,412.1,-0.22,35.0,101080.0
+20080301:0100,25.0,86.9,21.0,0.0,21.0,413.0,1.2,33.0,101150.0
+
+T2m: 2-m air temperature (degree Celsius)
+RH: relative humidity (%)
+G(h): Global irradiance on the horizontal plane (W/m2)
+Gb(n): Beam/direct irradiance on a plane always normal to sun rays (W/m2)
+Gd(h): Diffuse irradiance on the horizontal plane (W/m2)
+IR(h): Surface infrared (thermal) irradiance on a horizontal plane (W/m2)
+WS10m: 10-m total wind speed (m/s)
+WD10m: 10-m wind direction (0 = N, 90 = E) (degree)
+SP: Surface (air) pressure (Pa)
+
+PVGIS (c) European Union, 2001-2026
