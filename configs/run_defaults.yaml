@@ -8,6 +8,9 @@ site_demo:               # For demostration only. Not used in production.
   latitude: 6.026
   longitude: 80.216
 
+data:
+  canonical_year: 2023   # PROVISIONAL — any non-leap year; rows re-indexed onto it by (month, day, hour)
+
 solar_position:
   method: "nrel_numpy"   # Computed once, shared by all pipelines
 

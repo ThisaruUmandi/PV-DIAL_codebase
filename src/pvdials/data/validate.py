@@ -27,7 +27,9 @@ class ValidationResult:
 
 
 def validate_structure(df: pd.DataFrame) -> ValidationResult:
-    """Tier 1: basic structural sanity — no missing values, no duplicate timestamps."""
+    """Tier 1: basic structural sanity — no missing values, no duplicate
+    timestamps, and regular hourly steps (no gaps). Any length is allowed.
+    """
     result = ValidationResult()
 
     if df.empty:
@@ -43,6 +45,14 @@ def validate_structure(df: pd.DataFrame) -> ValidationResult:
         if n_missing > 0:
             result.add_problem(f"Column '{col}' has {n_missing} missing value(s).")
 
+    steps = df.index.to_series().diff().dropna()
+    irregular = steps[steps != pd.Timedelta(hours=1)]
+    if not irregular.empty:
+        result.add_problem(
+            f"{len(irregular)} gap(s) or irregular step(s) in the hourly series "
+            f"(first at {irregular.index[0]:%d %b %H:%M})."
+        )
+
     return result
 
 
@@ -56,9 +66,12 @@ def validate_physical_ranges(df: pd.DataFrame) -> ValidationResult:
         if (df["ghi"] > 1400).any():
             result.add_warning("GHI exceeds 1400 W/m² on some row(s) — check for outliers.")
 
-    if "wind_speed" in df.columns:
-        if (df["wind_speed"] < 0).any():
-            result.add_problem("Wind speed has negative value(s) — physically impossible.")
+    # Backstop: preprocessing clamps negative wind speed, so none should remain
+    if "wind_speed" in df.columns and (df["wind_speed"] < 0).any():
+        result.add_problem("Wind speed has negative value(s) — physically impossible.")
+
+    if "rh" in df.columns and ((df["rh"] < 0) | (df["rh"] > 100)).any():
+        result.add_problem("Relative humidity outside 0–100 % on some row(s).")
 
     return result
 
