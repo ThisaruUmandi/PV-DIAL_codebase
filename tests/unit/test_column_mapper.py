@@ -4,9 +4,13 @@ import pandas as pd
 
 from pvdials.data.column_mapper import (
     FROM_CSV,
+    TAG_ASSUMED_ABSENT,
+    TAG_FILE,
+    TAG_USER_ENTERED,
     USER_ENTERED,
     detect_columns,
     detect_site_metadata,
+    detect_time_offset,
 )
 from pvdials.data.upload import load_uploaded_csv
 
@@ -41,6 +45,7 @@ def test_detects_optional_rh_and_supplied_dni_dhi():
     assert mapping.found["rh"] == "RH"
     assert mapping.found["dni"] == "Gb(n)"
     assert mapping.found["dhi"] == "Gd(h)"
+    assert mapping.found["pressure"] == "SP"
     assert mapping.is_complete()
 
 
@@ -78,3 +83,30 @@ def test_user_entered_value_is_tagged():
     assert site.values["latitude"] == 6.026
     assert site.sources["latitude"] == USER_ENTERED
     assert "latitude" not in site.missing
+
+
+def test_time_offset_read_from_pvgis_header():
+    uploaded = load_uploaded_csv(FIXTURES / "sample_pvgis_tmy.csv")
+    offset = detect_time_offset(uploaded.preamble)
+
+    assert offset.value_h == 0.5
+    assert offset.source == TAG_FILE
+    assert offset.notice is None
+
+
+def test_time_offset_assumed_zero_with_notice_when_absent():
+    offset = detect_time_offset([])
+
+    assert offset.value_h == 0.0
+    assert offset.source == TAG_ASSUMED_ABSENT
+    assert offset.notice
+
+
+def test_time_offset_user_override_is_tagged():
+    offset = detect_time_offset([])
+
+    offset.set_user_value(0.25)
+
+    assert offset.value_h == 0.25
+    assert offset.source == TAG_USER_ENTERED
+    assert offset.notice is None

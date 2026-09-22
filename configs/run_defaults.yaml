@@ -1,5 +1,6 @@
 # PV-DIAL run defaults. Every value here is written into provenance.
 # Values marked PROVISIONAL must not be treated as settled.
+# Values marked HELD FIXED are model choices kept constant across all configurations.
 
 versions:
   pvlib: "0.15.2"        # Must match the installed version
@@ -13,7 +14,19 @@ data:
 
 solar_position:
   method: "nrel_numpy"   # Computed once, shared by all pipelines
+  delta_t_s: 67.0              # PROVISIONAL parameter. None would compute it from the synthetic canonical year
+  atmos_refract_deg: 0.5667    # PROVISIONAL parameter (pvlib's value, now explicit)
+  standard_pressure_pa: 101325 # Used only when pressure source = fixed_standard
+  sp_surface_tolerance: 0.05   # PROVISIONAL — median SP within ±5 % of alt2pres(elevation)
+
+airmass:
+  model: "kastenyoung1989"     # HELD FIXED — decision entry pending. Uses apparent zenith
+
+extraterrestrial:
+  method: "spencer"            # HELD FIXED — decision entry pending
+  solar_constant_w_m2: 1366.1
 
 dla:
   tau: 0.05              # PROVISIONAL — justified by sensitivity analysis (A18)
-  daylight_mask_zenith_deg: null   # to be set in Step 3 (mask from solar position only)
+  daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
+  daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)

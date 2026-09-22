@@ -11,6 +11,10 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 
+# Plausible surface pressure range in Pa (sea level ~101,325; ~5,000 m ~54,000)
+PRESSURE_MIN_PA = 30_000
+PRESSURE_MAX_PA = 110_000
+
 
 @dataclass
 class ValidationResult:
@@ -72,6 +76,15 @@ def validate_physical_ranges(df: pd.DataFrame) -> ValidationResult:
 
     if "rh" in df.columns and ((df["rh"] < 0) | (df["rh"] > 100)).any():
         result.add_problem("Relative humidity outside 0–100 % on some row(s).")
+
+    # Surface pressure must be in Pa. hPa (~1000) or kPa (~100) values fall outside.
+    if "pressure" in df.columns and (
+        (df["pressure"] < PRESSURE_MIN_PA) | (df["pressure"] > PRESSURE_MAX_PA)
+    ).any():
+        result.add_problem(
+            f"Surface pressure outside {PRESSURE_MIN_PA:,}–{PRESSURE_MAX_PA:,} Pa on some "
+            f"row(s). Pressure must be in Pa."
+        )
 
     return result
 

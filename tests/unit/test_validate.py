@@ -86,3 +86,13 @@ def test_rh_out_of_range_is_caught():
 
     assert not result.passed
     assert any("Relative humidity" in p for p in result.problems)
+
+
+def test_pressure_in_hpa_is_caught():
+    df = _load_clean("sample_pvgis_tmy.csv")
+    df["pressure"] = df["pressure"] / 100  # hPa, not Pa
+
+    result = run_all_validations(df)
+
+    assert not result.passed
+    assert any("Pressure must be in Pa" in p for p in result.problems)

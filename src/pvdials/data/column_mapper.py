@@ -25,6 +25,8 @@ KNOWN_ALIASES: dict[str, list[str]] = {
     "rh": ["rh", "rh2m", "relative_humidity", "relative humidity"],
     "dni": ["gb(n)", "dni"],
     "dhi": ["gd(h)", "dhi"],
+    # Surface pressure in Pa, for solar-position refraction (Step 3)
+    "pressure": ["sp", "surface_pressure", "surface pressure", "pressure"],
 }
 
 REQUIRED_FIELDS = ["timestamp", "ghi", "temp_air", "wind_speed"]
@@ -38,6 +40,19 @@ SITE_ALIASES: dict[str, list[str]] = {
 
 FROM_CSV = "From CSV"
 USER_ENTERED = "User entered"
+
+# Provenance tags for values that feed solar position (Step 3 decisions, 23/09)
+TAG_FILE = "file"
+TAG_USER_ENTERED = "user_entered"
+TAG_ASSUMED_ABSENT = "assumed_absent_from_header"
+
+TIME_OFFSET_ALIASES = ["irradiance time offset", "time offset"]
+
+NO_OFFSET_NOTICE = (
+    "No irradiance time offset was found in the file header. Solar position is "
+    "computed at the file's own timestamps (offset 0 h). If the dataset's "
+    "documentation states an offset, enter it here."
+)
 
 
 @dataclass
@@ -145,3 +160,34 @@ def detect_site_metadata(preamble: list[str], df: pd.DataFrame) -> SiteMetadata:
             site.values[site_field] = value
             site.sources[site_field] = FROM_CSV
     return site
+
+
+@dataclass
+class TimeOffset:
+    """Offset (hours) from each timestamp to the time its irradiance value represents.
+
+    PVGIS states it in the header ("Irradiance Time Offset (h): 0.5").
+    source: TAG_FILE, TAG_ASSUMED_ABSENT or TAG_USER_ENTERED
+    notice: text shown to the user when the offset was assumed, else None
+    """
+
+    value_h: float
+    source: str
+    notice: str | None = None
+
+    def set_user_value(self, value_h: float) -> None:
+        self.value_h = float(value_h)
+        self.source = TAG_USER_ENTERED
+        self.notice = None
+
+
+def detect_time_offset(preamble: list[str]) -> TimeOffset:
+    """Read the irradiance time offset from the preamble.
+
+    If the header doesn't state one, 0 h is assumed — recorded as an
+    assumption, with a notice for the user, who may override it.
+    """
+    value = _from_preamble(preamble, TIME_OFFSET_ALIASES)
+    if value is None:
+        return TimeOffset(0.0, TAG_ASSUMED_ABSENT, NO_OFFSET_NOTICE)
+    return TimeOffset(value, TAG_FILE)
