@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from pvdials.data.column_mapper import detect_columns
 from pvdials.data.upload import UploadError, load_uploaded_csv
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -44,3 +45,14 @@ def test_rejects_file_with_no_rows(tmp_path):
 
     with pytest.raises(UploadError):
         load_uploaded_csv(empty)
+
+
+def test_no_timestamp_column_falls_back_to_first_line(tmp_path):
+    f = tmp_path / "no_time.csv"
+    f.write_text("GHI,T2m,WS10m\n0,25,1\n", encoding="utf-8")
+
+    uploaded = load_uploaded_csv(f)
+
+    assert uploaded.preamble == []
+    assert list(uploaded.table.columns) == ["GHI", "T2m", "WS10m"]
+    assert "timestamp" in detect_columns(uploaded.table).missing

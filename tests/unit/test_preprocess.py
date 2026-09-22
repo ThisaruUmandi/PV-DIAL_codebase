@@ -1,9 +1,11 @@
+import calendar
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from pvdials.config import load_defaults
 from pvdials.data.column_mapper import ColumnMapping, detect_columns
 from pvdials.data.preprocess import (
     PreprocessError,
@@ -138,9 +140,36 @@ def test_29_february_is_rejected():
 
 
 def test_leap_canonical_year_is_rejected():
+    raw_df = pd.read_csv(FIXTURES / "sample_weather_complete.csv")
+
     with pytest.raises(PreprocessError, match="leap year"):
-        preprocess(
-            pd.read_csv(FIXTURES / "sample_weather_complete.csv"),
-            detect_columns(pd.read_csv(FIXTURES / "sample_weather_complete.csv")),
-            canonical_year=2024,
-        )
+        preprocess(raw_df, detect_columns(raw_df), canonical_year=2024)
+
+
+def test_default_canonical_year_is_not_a_leap_year():
+    assert not calendar.isleap(load_defaults()["data"]["canonical_year"])
+
+
+def test_timezone_aware_timestamps_converted_to_utc():
+    # 05:30 at +05:30 is 00:00 UTC
+    df = pd.DataFrame(
+        {
+            "timestamp": ["2020-01-01 05:30:00+05:30", "2020-01-01 06:30:00+05:30"],
+            "ghi": [0.0, 0.0],
+            "temp_air": [25.0, 25.0],
+            "wind_speed": [1.0, 1.0],
+        }
+    )
+
+    result = preprocess(df, detect_columns(df), canonical_year=YEAR)
+
+    assert result.df.index[0] == pd.Timestamp(f"{YEAR}-01-01 00:00", tz="UTC")
+    _step(result, "convert_to_utc")
+
+
+def test_same_input_twice_gives_identical_output():
+    first = _run("sample_pvgis_tmy.csv")
+    second = _run("sample_pvgis_tmy.csv")
+
+    pd.testing.assert_frame_equal(first.df, second.df)
+    assert first.steps == second.steps
