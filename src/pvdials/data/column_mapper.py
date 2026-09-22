@@ -1,4 +1,4 @@
-"""Maps whatever columns an uploaded CSV happens to have onto PV-DIALS's
+"""Maps whatever columns an uploaded CSV happens to have onto PV-DIAL's
 canonical field names, so every later layer (preprocess, physics, etc.)
 only ever deals with canonical names — never raw, source-specific headers.
 

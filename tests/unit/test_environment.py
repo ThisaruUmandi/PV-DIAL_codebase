@@ -1,6 +1,7 @@
 import pvlib
 
-from pvdials.config import check_pvlib_version, load_defaults
+from pvdials.config import load_defaults
+from pvdials.physics.version import check_pvlib_version
 from pvdials.types import ExecutionSet, Stage
 
 

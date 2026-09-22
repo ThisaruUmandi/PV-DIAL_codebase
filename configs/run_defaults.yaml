@@ -1,4 +1,4 @@
-# PV-DIALS run defaults. Every value here is written into provenance.
+# PV-DIAL run defaults. Every value here is written into provenance.
 # Values marked PROVISIONAL must not be treated as settled.
 
 versions:

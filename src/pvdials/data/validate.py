@@ -15,12 +15,12 @@ import pandas as pd
 @dataclass
 class ValidationResult:
     passed: bool = True
-    errors: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
-    def add_error(self, message: str) -> None:
+    def add_problem(self, message: str) -> None:
         self.passed = False
-        self.errors.append(message)
+        self.problems.append(message)
 
     def add_warning(self, message: str) -> None:
         self.warnings.append(message)
@@ -31,17 +31,17 @@ def validate_structure(df: pd.DataFrame) -> ValidationResult:
     result = ValidationResult()
 
     if df.empty:
-        result.add_error("Dataset has no rows.")
+        result.add_problem("Dataset has no rows.")
         return result
 
     if df.index.duplicated().any():
         dupes = df.index.duplicated().sum()
-        result.add_error(f"{dupes} duplicate timestamp(s) found.")
+        result.add_problem(f"{dupes} duplicate timestamp(s) found.")
 
     for col in df.columns:
         n_missing = df[col].isna().sum()
         if n_missing > 0:
-            result.add_error(f"Column '{col}' has {n_missing} missing value(s).")
+            result.add_problem(f"Column '{col}' has {n_missing} missing value(s).")
 
     return result
 
@@ -52,13 +52,13 @@ def validate_physical_ranges(df: pd.DataFrame) -> ValidationResult:
 
     if "ghi" in df.columns:
         if (df["ghi"] < 0).any():
-            result.add_error("GHI has negative value(s) — physically impossible.")
+            result.add_problem("GHI has negative value(s) — physically impossible.")
         if (df["ghi"] > 1400).any():
             result.add_warning("GHI exceeds 1400 W/m² on some row(s) — check for outliers.")
 
     if "wind_speed" in df.columns:
         if (df["wind_speed"] < 0).any():
-            result.add_error("Wind speed has negative value(s) — physically impossible.")
+            result.add_problem("Wind speed has negative value(s) — physically impossible.")
 
     return result
 
@@ -93,7 +93,7 @@ def run_all_validations(df: pd.DataFrame) -> ValidationResult:
     for check in (validate_structure, validate_physical_ranges, validate_full_year_if_applicable):
         r = check(df)
         combined.passed = combined.passed and r.passed
-        combined.errors.extend(r.errors)
+        combined.problems.extend(r.problems)
         combined.warnings.extend(r.warnings)
 
     return combined

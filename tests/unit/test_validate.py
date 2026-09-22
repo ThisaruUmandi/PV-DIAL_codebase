@@ -21,7 +21,7 @@ def test_clean_sample_passes_structural_and_range_checks():
     result = run_all_validations(df)
 
     assert result.passed
-    assert not result.errors
+    assert not result.problems
 
 
 def test_short_file_warns_but_does_not_fail():
@@ -39,7 +39,7 @@ def test_negative_ghi_is_caught():
     result = run_all_validations(df)
 
     assert not result.passed
-    assert any("GHI has negative" in e for e in result.errors)
+    assert any("GHI has negative" in p for p in result.problems)
 
 
 def test_negative_wind_speed_is_caught():
@@ -49,7 +49,7 @@ def test_negative_wind_speed_is_caught():
     result = run_all_validations(df)
 
     assert not result.passed
-    assert any("Wind speed has negative" in e for e in result.errors)
+    assert any("Wind speed has negative" in p for p in result.problems)
 
 
 def test_duplicate_timestamp_is_caught():
@@ -59,4 +59,4 @@ def test_duplicate_timestamp_is_caught():
     result = run_all_validations(df_with_dupe)
 
     assert not result.passed
-    assert any("duplicate timestamp" in e for e in result.errors)
+    assert any("duplicate timestamp" in p for p in result.problems)
