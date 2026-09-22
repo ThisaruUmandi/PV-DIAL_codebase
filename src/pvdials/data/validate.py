@@ -15,12 +15,23 @@ import pandas as pd
 PRESSURE_MIN_PA = 30_000
 PRESSURE_MAX_PA = 110_000
 
+# True zenith at or above this means the sun is below the horizon
+HORIZON_ZENITH_DEG = 90.0
+
 
 @dataclass
 class ValidationResult:
+    """problems fail the check; warnings and notes never do.
+
+    notes: informational only (e.g. known sampling artefacts), never findings
+    counts: named counts recorded for provenance
+    """
+
     passed: bool = True
     problems: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    counts: dict[str, int] = field(default_factory=dict)
 
     def add_problem(self, message: str) -> None:
         self.passed = False
@@ -28,6 +39,16 @@ class ValidationResult:
 
     def add_warning(self, message: str) -> None:
         self.warnings.append(message)
+
+    def add_note(self, message: str) -> None:
+        self.notes.append(message)
+
+    def merge(self, other: ValidationResult) -> None:
+        self.passed = self.passed and other.passed
+        self.problems.extend(other.problems)
+        self.warnings.extend(other.warnings)
+        self.notes.extend(other.notes)
+        self.counts.update(other.counts)
 
 
 def validate_structure(df: pd.DataFrame) -> ValidationResult:
@@ -117,9 +138,51 @@ def run_all_validations(df: pd.DataFrame) -> ValidationResult:
     combined = ValidationResult()
 
     for check in (validate_structure, validate_physical_ranges, validate_full_year_if_applicable):
-        r = check(df)
-        combined.passed = combined.passed and r.passed
-        combined.problems.extend(r.problems)
-        combined.warnings.extend(r.warnings)
+        combined.merge(check(df))
 
     return combined
+
+
+def validate_physical_consistency(
+    df: pd.DataFrame,
+    zenith_mid: pd.Series,
+    zenith_start: pd.Series,
+    zenith_end: pd.Series,
+) -> ValidationResult:
+    """Tier 4: GHI > 0 while the sun is below the horizon at the hour's midpoint.
+
+    Uses true zenith from the shared SiteContext (Step 3). A flagged row is a
+    sampling artefact if the sun is above the horizon at the hour's start or
+    end: midpoint sampling misses a partial hour of sun at sunrise/sunset.
+    Artefacts are counted in a note only. Any other flagged row is a warning.
+    Nothing here fails the file — the tiers check the input is sound and
+    complete, not accurate.
+    """
+    for series in (zenith_mid, zenith_start, zenith_end):
+        if not series.index.equals(df.index):
+            raise ValueError("Zenith series must share the weather table's index.")
+
+    result = ValidationResult()
+
+    flagged = (df["ghi"] > 0) & (zenith_mid >= HORIZON_ZENITH_DEG)
+    sun_up_at_boundary = (zenith_start < HORIZON_ZENITH_DEG) | (zenith_end < HORIZON_ZENITH_DEG)
+    artefact = flagged & sun_up_at_boundary
+    unexplained = flagged & ~sun_up_at_boundary
+
+    result.counts["tier4_sampling_artefacts"] = int(artefact.sum())
+    result.counts["tier4_unexplained"] = int(unexplained.sum())
+
+    if artefact.any():
+        result.add_note(
+            f"{int(artefact.sum())} sunrise/sunset hour(s) have GHI > 0 while the sun is "
+            f"below the horizon at the hour's midpoint but above it at the hour's start "
+            f"or end. This comes from midpoint sampling, not from the data."
+        )
+    if unexplained.any():
+        first = df.index[unexplained.to_numpy()][0]
+        result.add_warning(
+            f"{int(unexplained.sum())} hour(s) have GHI > 0 while the sun is below the "
+            f"horizon at the hour's start, midpoint and end (first at {first:%d %b %H:%M})."
+        )
+
+    return result
