@@ -9,7 +9,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pvdials.physics.hardware import ADR_INVERTER, CEC, CEC_INVERTER, SANDIA, ModuleRecord, has_noct
+import pandas as pd
+
+from pvdials.physics.hardware import (
+    ADR_INVERTER,
+    CEC,
+    CEC_INVERTER,
+    SANDIA,
+    ModuleRecord,
+    has_noct,
+    inverter_libraries,
+)
 from pvdials.physics.mounting import Mounting, sapm_key
 from pvdials.types import Stage
 
@@ -194,3 +204,88 @@ def stage5_selectable(
     if model == "adr" and ADR_INVERTER not in inverter_libraries:
         return False, NO_ADR_INVERTER_REASON
     return True, None
+
+
+# --- Step 6: pool validity (KT §7.5) ----------------------------------------------
+#
+# Filter 1 (stage applicability) and filter 3 (parameter availability) are the
+# static pool and the stageN_selectable() functions above, already built as each
+# stage needed them. What's added here: filter 2 (cross-stage compatibility, the
+# only known case in this project), and one merged "pool view" per stage that
+# combines both filters into the single call a picker screen actually needs —
+# every candidate, in pool order, already annotated with why it can't be chosen.
+
+# KT §7.5, filter 2 — the only known cross-stage case in this project (checked
+# against dc.py, 24/09): pvwatts_dc is the only Stage 4 model with no v_dc.
+STAGE4_PRODUCES_V_DC: dict[str, bool] = {
+    "pvwatts_dc": False,
+    "sapm": True,
+    "singlediode_desoto": True,
+    "singlediode_cec": True,
+}
+
+
+def dc_model_produces_v_dc(model: str) -> bool:
+    """Whether this Stage 4 model produces v_dc (KT §7.5, filter 2).
+
+    This is the declared fact, used before Stage 4 has run (e.g. by a picker
+    screen deciding whether to show sandia/adr as selectable). ac.py's own
+    runtime check ("v_dc" in dc_result.outputs.columns) stays as a defensive
+    backstop on what actually happened; a test ties the two together.
+    """
+    return STAGE4_PRODUCES_V_DC[model]
+
+
+def _merge(candidate: CandidateModel, ok: bool, reason: str | None) -> CandidateModel:
+    """Demote a statically-selectable candidate if the dynamic check fails.
+
+    Never promotes a statically-excluded one — stageN_selectable() already
+    assumes the static check passed, same as every adapter's own check.
+    """
+    if candidate.selectable and not ok:
+        return CandidateModel(candidate.name, candidate.stage, selectable=False, reason=reason)
+    return candidate
+
+
+def stage1_pool_view() -> tuple[CandidateModel, ...]:
+    """Stage 1 has no dynamic gate; the static pool already reflects everything."""
+    return stage_pool(Stage.DECOMPOSITION)
+
+
+def stage2_pool_view() -> tuple[CandidateModel, ...]:
+    """Stage 2 has no dynamic gate (confirmed 23/09: zero misfits)."""
+    return stage_pool(Stage.TRANSPOSITION)
+
+
+def stage3_pool_view(module: ModuleRecord, mounting: Mounting) -> tuple[CandidateModel, ...]:
+    """The whole Stage 3 pool, in pool order, with the module/mounting gate applied."""
+    return tuple(
+        _merge(c, *stage3_selectable(c.name, module, mounting)) if c.selectable else c
+        for c in stage_pool(Stage.TEMPERATURE)
+    )
+
+
+def stage4_pool_view(module: ModuleRecord) -> tuple[CandidateModel, ...]:
+    """The whole Stage 4 pool, in pool order, with the module-library gate applied."""
+    return tuple(
+        _merge(c, *stage4_selectable(c.name, module)) if c.selectable else c
+        for c in stage_pool(Stage.DC)
+    )
+
+
+def stage5_pool_view(
+    inverter_name: str,
+    cec_inverters: pd.DataFrame,
+    adr_inverters: pd.DataFrame,
+    dc_model: str,
+) -> tuple[CandidateModel, ...]:
+    """The whole Stage 5 pool, in pool order, given the plain inverter name and
+    the already-chosen DC model — no DC adapter run required to know whether
+    sandia/adr are selectable (filter 2, cross-stage compatibility).
+    """
+    libraries = inverter_libraries(inverter_name, cec_inverters, adr_inverters)
+    dc_has_v_dc = dc_model_produces_v_dc(dc_model)
+    return tuple(
+        _merge(c, *stage5_selectable(c.name, libraries, dc_has_v_dc)) if c.selectable else c
+        for c in stage_pool(Stage.AC)
+    )
