@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pvdials.physics.hardware import ModuleRecord, has_noct
+from pvdials.physics.hardware import CEC, SANDIA, ModuleRecord, has_noct
 from pvdials.physics.mounting import Mounting, sapm_key
 from pvdials.types import Stage
 
@@ -38,10 +38,19 @@ def _shown(name: str, stage: Stage, reason: str) -> CandidateModel:
 _S1 = Stage.DECOMPOSITION
 _S2 = Stage.TRANSPOSITION
 _S3 = Stage.TEMPERATURE
+_S4 = Stage.DC
 
 # Reasons for the module- and mounting-dependent Stage 3 models (see stage3_selectable)
 NO_NOCT_REASON = "needs the module's NOCT; the selected module's library doesn't carry it"
 NO_SAPM_MOUNTING_REASON = "no SAPM coefficient set for this mounting/construction combination"
+
+# Reasons for the module-dependent Stage 4 models (see stage4_selectable)
+NO_SAPM_MODULE_REASON = (
+    "needs SAPM's own characterisation fields; the selected module's library doesn't carry them"
+)
+NO_CEC_MODULE_REASON = (
+    "needs CEC single-diode reference parameters; the selected module's library doesn't carry them"
+)
 
 # Stage 1 fit check, 23/09: Stage 1 takes GHI (plus the shared site context) only.
 # Stage 2 fit check, 23/09: get_total_irradiance() forwards dni_extra/airmass only to
@@ -88,12 +97,32 @@ STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
         _selectable("ross", _S3),
         _selectable("sapm_cell", _S3),
     ),
+    # Stage 4 fit check, 23/09: singlediode_pvsyst needs gamma_ref/mu_gamma/R_sh_0,
+    # carried by neither CECMod nor SandiaMod — a static exclusion, not module-gated.
+    # pvwatts_dc/sapm/singlediode_desoto/singlediode_cec are module-library-gated,
+    # checked per run by stage4_selectable(), not here (N38 closed the SandiaMod
+    # pvwatts_dc gap, so pvwatts_dc itself has no static exclusion).
+    Stage.DC: (
+        _selectable("pvwatts_dc", _S4),
+        _selectable("sapm", _S4),
+        _selectable("singlediode_desoto", _S4),
+        _selectable("singlediode_cec", _S4),
+        _shown(
+            "singlediode_pvsyst",
+            _S4,
+            "needs gamma_ref, mu_gamma, R_sh_0; not carried by CECMod or SandiaMod",
+        ),
+    ),
 }
 
 # Stage 3 models gated by the module's NOCT, applying the same rule Umee gave for
 # fuentes/noct_sam to ross too (23/09): ross needs noct or k, and k has no source
 # anywhere in this project.
 _NOCT_GATED_MODELS = {"fuentes", "noct_sam", "ross"}
+
+# Stage 4 models gated by which module library was selected
+_SANDIA_GATED_MODELS = {"sapm"}
+_CEC_GATED_MODELS = {"singlediode_desoto", "singlediode_cec"}
 
 
 def stage_pool(stage: Stage) -> tuple[CandidateModel, ...]:
@@ -119,4 +148,16 @@ def stage3_selectable(
         return False, NO_NOCT_REASON
     if model == "sapm_cell" and sapm_key(mounting) is None:
         return False, NO_SAPM_MOUNTING_REASON
+    return True, None
+
+
+def stage4_selectable(model: str, module: ModuleRecord) -> tuple[bool, str | None]:
+    """Module-library-dependent Stage 4 selectability, layered on the static pool.
+
+    Assumes `model` already passed the static pool check (get_candidate).
+    """
+    if model in _SANDIA_GATED_MODELS and module.library != SANDIA:
+        return False, NO_SAPM_MODULE_REASON
+    if model in _CEC_GATED_MODELS and module.library != CEC:
+        return False, NO_CEC_MODULE_REASON
     return True, None

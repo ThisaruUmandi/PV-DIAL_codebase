@@ -64,3 +64,11 @@ stage3:
     geometry_default: "open_rack"        # PROVISIONAL pre-fill (23/09)
     construction_default: "glass_polymer"  # PROVISIONAL pre-fill (23/09)
     array_height_default: 1              # PROVISIONAL pre-fill (noct_sam only)
+
+stage4:
+  iam_physical: {n: 1.526, K: 4.0, L: 0.002}      # PROVISIONAL — pvlib defaults, now explicit
+  singlediode:
+    method: "lambertw"                             # HELD FIXED — pvlib default
+    calcparams: {EgRef: 1.121, dEgdT: -0.0002677, irrad_ref: 1000, temp_ref: 25}   # HELD FIXED
+  pvwatts_dc: {temp_ref: 25.0, k: null, cap_adjustment: false}   # HELD FIXED (k has no source)
+  sapm: {temperature_ref: 25, irradiance_ref: 1000}   # HELD FIXED — pvlib defaults

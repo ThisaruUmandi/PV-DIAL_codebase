@@ -6,10 +6,14 @@ from pvdials.physics.hardware import (
     CEC,
     SANDIA,
     ModuleRecord,
+    cec_diode_params,
+    gamma_pdc,
     has_noct,
     module_dimensions,
     module_efficiency,
     noct,
+    pdc0,
+    resolve_array_size,
 )
 
 CEC_MODULES = pvsystem.retrieve_sam(CEC)
@@ -68,3 +72,72 @@ def test_module_dimensions_from_cec():
 def test_module_dimensions_raises_for_sandia():
     with pytest.raises(AdapterError, match="Length/Width"):
         module_dimensions(SANDIA_MODULE)
+
+
+def test_pdc0_from_cec_stc_field():
+    value, formula = pdc0(CEC_MODULE)
+
+    assert value == pytest.approx(float(CEC_MODULE.params["STC"]))
+    assert formula == "STC"
+
+
+def test_pdc0_from_sandia_vmpo_impo():
+    value, formula = pdc0(SANDIA_MODULE)
+
+    p = SANDIA_MODULE.params
+    assert value == pytest.approx(float(p["Vmpo"]) * float(p["Impo"]))
+    assert formula == "Vmpo * Impo"
+
+
+def test_gamma_pdc_from_cec_gamma_r_divided_by_100():
+    value, formula = gamma_pdc(CEC_MODULE)
+
+    p = CEC_MODULE.params
+    assert value == pytest.approx(float(p["gamma_r"]) / 100.0)
+    assert -0.006 < value < -0.002  # matches pvwatts_dc's documented typical range
+    assert formula == "gamma_r / 100"
+
+
+def test_gamma_pdc_from_sandia_product_rule():
+    value, formula = gamma_pdc(SANDIA_MODULE)
+
+    p = SANDIA_MODULE.params
+    # Bvmpo's own Mbvmp irradiance-dependence term vanishes at reference conditions
+    # (Ee=1), confirmed against sapm()'s own source (23/09) — so the raw field is used
+    # directly, with no extra reference-condition adjustment needed here.
+    expected = float(p["Bvmpo"]) / float(p["Vmpo"]) + float(p["Aimp"])
+    assert value == pytest.approx(expected)
+    assert formula == "Bvmpo / Vmpo + Aimp"
+
+
+def test_cec_diode_params_reads_calcparams_desoto_fields():
+    params = cec_diode_params(CEC_MODULE, need_adjust=False)
+
+    assert set(params) == {"alpha_sc", "a_ref", "I_L_ref", "I_o_ref", "R_sh_ref", "R_s"}
+    assert params["alpha_sc"] == pytest.approx(float(CEC_MODULE.params["alpha_sc"]))
+
+
+def test_cec_diode_params_with_adjust_for_calcparams_cec():
+    params = cec_diode_params(CEC_MODULE, need_adjust=True)
+
+    assert "Adjust" in params
+    assert params["Adjust"] == pytest.approx(float(CEC_MODULE.params["Adjust"]))
+
+
+def test_cec_diode_params_raises_for_sandia():
+    with pytest.raises(AdapterError, match="single-diode"):
+        cec_diode_params(SANDIA_MODULE, need_adjust=False)
+
+
+def test_array_size_has_no_default():
+    with pytest.raises(AdapterError, match="[Nn]o default"):
+        resolve_array_size(None, None)
+    with pytest.raises(AdapterError, match="[Nn]o default"):
+        resolve_array_size(10, None)
+
+
+def test_array_size_resolves_when_both_given():
+    array = resolve_array_size(10, 2)
+
+    assert array.modules_per_string == 10
+    assert array.strings_per_inverter == 2

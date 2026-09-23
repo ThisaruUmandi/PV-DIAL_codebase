@@ -61,3 +61,89 @@ def module_dimensions(module: ModuleRecord) -> tuple[float, float]:
     if "Length" not in module.params.index or "Width" not in module.params.index:
         raise AdapterError(f"Module '{module.name}' ({module.library}) has no Length/Width.")
     return float(module.params["Length"]), float(module.params["Width"])
+
+
+# --- N38: pdc0 / gamma_pdc derivation for Stage 4's pvwatts_dc -------------------
+
+PDC0_FORMULA_CEC = "STC"
+PDC0_FORMULA_SANDIA = "Vmpo * Impo"
+GAMMA_PDC_FORMULA_CEC = "gamma_r / 100"
+# Product rule for P = V*I: (1/P)(dP/dT) = (1/V)(dV/dT) + (1/I)(dI/dT). Both terms
+# are SAPM's own published coefficients at reference conditions (Ee=1): sapm()'s own
+# source confirms Bvmpo's irradiance-dependence term (Mbvmp) vanishes there, and
+# Aimp is already the fractional (1/degC) coefficient (checked 23/09).
+GAMMA_PDC_FORMULA_SANDIA = "Bvmpo / Vmpo + Aimp"
+
+
+def pdc0(module: ModuleRecord) -> tuple[float, str]:
+    """Nameplate DC power at STC. PROVISIONAL (N38)."""
+    p = module.params
+    if module.library == CEC:
+        if "STC" not in p.index:
+            raise AdapterError(f"Module '{module.name}' ({CEC}) has no STC field.")
+        return float(p["STC"]), PDC0_FORMULA_CEC
+    if module.library == SANDIA:
+        missing = [f for f in ("Vmpo", "Impo") if f not in p.index]
+        if missing:
+            raise AdapterError(f"Module '{module.name}' ({SANDIA}) is missing {missing}.")
+        return float(p["Vmpo"]) * float(p["Impo"]), PDC0_FORMULA_SANDIA
+    raise AdapterError(f"pdc0 has no derivation rule for library '{module.library}'.")
+
+
+def gamma_pdc(module: ModuleRecord) -> tuple[float, str]:
+    """Temperature coefficient of DC power, 1/degC. PROVISIONAL (N38)."""
+    p = module.params
+    if module.library == CEC:
+        if "gamma_r" not in p.index:
+            raise AdapterError(f"Module '{module.name}' ({CEC}) has no gamma_r field.")
+        return float(p["gamma_r"]) / 100.0, GAMMA_PDC_FORMULA_CEC
+    if module.library == SANDIA:
+        missing = [f for f in ("Bvmpo", "Vmpo", "Aimp") if f not in p.index]
+        if missing:
+            raise AdapterError(f"Module '{module.name}' ({SANDIA}) is missing {missing}.")
+        value = float(p["Bvmpo"]) / float(p["Vmpo"]) + float(p["Aimp"])
+        return value, GAMMA_PDC_FORMULA_SANDIA
+    raise AdapterError(f"gamma_pdc has no derivation rule for library '{module.library}'.")
+
+
+# --- CEC single-diode reference parameters ---------------------------------------
+
+_CEC_DIODE_FIELDS = ("alpha_sc", "a_ref", "I_L_ref", "I_o_ref", "R_sh_ref", "R_s")
+
+
+def cec_diode_params(module: ModuleRecord, *, need_adjust: bool) -> dict:
+    """calcparams_desoto/calcparams_cec kwargs, read straight from a CECMod entry.
+
+    CECMod's own field names already match the calcparams_* kwargs 1:1.
+    """
+    if module.library != CEC:
+        raise AdapterError(
+            f"Module '{module.name}' ({module.library}) has no CEC single-diode "
+            f"reference parameters."
+        )
+    fields = _CEC_DIODE_FIELDS + (("Adjust",) if need_adjust else ())
+    missing = [f for f in fields if f not in module.params.index]
+    if missing:
+        raise AdapterError(f"Module '{module.name}' ({CEC}) is missing {missing}.")
+    return {f: float(module.params[f]) for f in fields}
+
+
+@dataclass(frozen=True)
+class ArraySize:
+    """modules_per_string, strings_per_inverter. Always user-entered, no default (N40) —
+    1x1 would itself be an unstated assumption, same reasoning as tilt/azimuth.
+    """
+
+    modules_per_string: int
+    strings_per_inverter: int
+
+
+def resolve_array_size(
+    modules_per_string: int | None, strings_per_inverter: int | None
+) -> ArraySize:
+    if modules_per_string is None or strings_per_inverter is None:
+        raise AdapterError(
+            "Array size (modules_per_string, strings_per_inverter) is required; it has no "
+            "default (N40)."
+        )
+    return ArraySize(int(modules_per_string), int(strings_per_inverter))

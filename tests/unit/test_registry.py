@@ -3,7 +3,7 @@ from pvlib import pvsystem
 from pvdials.config import load_defaults
 from pvdials.physics.hardware import CEC, SANDIA, ModuleRecord
 from pvdials.physics.mounting import resolve_mounting
-from pvdials.physics.registry import stage3_selectable, stage_pool
+from pvdials.physics.registry import stage3_selectable, stage4_selectable, stage_pool
 from pvdials.types import Stage
 
 STAGE1_POOL_ORDER = [
@@ -112,4 +112,51 @@ def test_stage3_sapm_cell_gated_by_mounting_combination():
 def test_stage3_unconditional_models_always_selectable():
     for model in ("faiman", "pvsyst_cell"):
         ok, reason = stage3_selectable(model, None, DEFAULT_MOUNTING)
+        assert ok and reason is None
+
+
+STAGE4_POOL_ORDER = [
+    "pvwatts_dc",
+    "sapm",
+    "singlediode_desoto",
+    "singlediode_cec",
+    "singlediode_pvsyst",
+]
+
+
+def test_stage4_pool_is_in_pool_order():
+    assert [c.name for c in stage_pool(Stage.DC)] == STAGE4_POOL_ORDER
+
+
+def test_stage4_static_exclusion_is_singlediode_pvsyst_only():
+    pool = stage_pool(Stage.DC)
+    shown = {c.name for c in pool if not c.selectable}
+
+    assert shown == {"singlediode_pvsyst"}
+    assert "gamma_ref" in pool[-1].reason
+    assert all(c.reason is None for c in pool if c.selectable)
+
+
+def test_stage4_sapm_gated_to_sandia():
+    ok, reason = stage4_selectable("sapm", SANDIA_MODULE)
+    assert ok and reason is None
+
+    ok, reason = stage4_selectable("sapm", CEC_MODULE)
+    assert not ok
+    assert "SAPM" in reason
+
+
+def test_stage4_singlediode_gated_to_cec():
+    for model in ("singlediode_desoto", "singlediode_cec"):
+        ok, reason = stage4_selectable(model, CEC_MODULE)
+        assert ok and reason is None
+
+        ok, reason = stage4_selectable(model, SANDIA_MODULE)
+        assert not ok
+        assert "CEC" in reason
+
+
+def test_stage4_pvwatts_dc_selectable_for_both_libraries():
+    for module in (CEC_MODULE, SANDIA_MODULE):
+        ok, reason = stage4_selectable("pvwatts_dc", module)
         assert ok and reason is None

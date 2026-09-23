@@ -245,3 +245,20 @@ def validate_post_temperature(outputs: pd.DataFrame, weather: pd.DataFrame) -> V
             f"Cell temperature is more than 5 C below air temperature on {n_too_cold} row(s)."
         )
     return result
+
+
+def validate_post_dc(outputs: pd.DataFrame) -> ValidationResult:
+    """Structural sanity check on Stage 4 output: p_dc finite and >= 0.
+
+    Not one of the KT's six named tiers. The AC <= DC regression test is
+    Stage 5's job (N21).
+    """
+    result = ValidationResult()
+    values = outputs["p_dc"].to_numpy(dtype=float)
+    n_nonfinite = int((~np.isfinite(values)).sum())
+    n_negative = int((values < 0).sum())
+    if n_nonfinite:
+        result.add_problem(f"DC power has {n_nonfinite} non-finite value(s).")
+    if n_negative:
+        result.add_problem(f"DC power has {n_negative} negative value(s).")
+    return result
