@@ -204,3 +204,21 @@ def validate_post_decomposition(outputs: pd.DataFrame) -> ValidationResult:
         if n_negative:
             result.add_problem(f"Stage 1 {col.upper()} has {n_negative} negative value(s).")
     return result
+
+
+def validate_post_transposition(outputs: pd.DataFrame) -> ValidationResult:
+    """Structural sanity check on Stage 2 output: poa_global finite and >= 0.
+
+    Not one of the KT's six named tiers — a basic engineering guard, the
+    same shape as the AC <= DC invariant, catching an adapter fault rather
+    than describing the input.
+    """
+    result = ValidationResult()
+    values = outputs["poa_global"].to_numpy(dtype=float)
+    n_nonfinite = int((~np.isfinite(values)).sum())
+    n_negative = int((values < 0).sum())
+    if n_nonfinite:
+        result.add_problem(f"POA global has {n_nonfinite} non-finite value(s).")
+    if n_negative:
+        result.add_problem(f"POA global has {n_negative} negative value(s).")
+    return result

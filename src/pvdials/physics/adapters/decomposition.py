@@ -17,13 +17,12 @@ import pandas as pd
 import pvlib
 
 from pvdials.config import load_defaults
+from pvdials.physics.adapters import AdapterError
 from pvdials.physics.registry import get_candidate
 from pvdials.physics.site import SiteContext
 from pvdials.types import Stage
 
-
-class AdapterError(Exception):
-    """Raised when a model can't be run in this stage slot."""
+__all__ = ["AdapterError", "DecompositionResult", "decompose"]
 
 
 @dataclass(frozen=True)

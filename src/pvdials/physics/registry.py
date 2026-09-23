@@ -34,8 +34,11 @@ def _shown(name: str, stage: Stage, reason: str) -> CandidateModel:
 
 
 _S1 = Stage.DECOMPOSITION
+_S2 = Stage.TRANSPOSITION
 
 # Stage 1 fit check, 23/09: Stage 1 takes GHI (plus the shared site context) only.
+# Stage 2 fit check, 23/09: get_total_irradiance() forwards dni_extra/airmass only to
+# the models that need them, so one uniform call fits every candidate — no misfits.
 STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
     Stage.DECOMPOSITION: (
         _selectable("erbs", _S1),
@@ -48,6 +51,15 @@ STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
         _selectable("orgill_hollands", _S1),
         _shown("campbell_norman", _S1, "needs atmospheric transmittance, not GHI"),
         _shown("gti_dirint", _S1, "needs plane-of-array irradiance, not GHI"),
+    ),
+    Stage.TRANSPOSITION: (
+        _selectable("isotropic", _S2),
+        _selectable("klucher", _S2),
+        _selectable("haydavies", _S2),
+        _selectable("reindl", _S2),
+        _selectable("king", _S2),
+        _selectable("perez", _S2),
+        _selectable("perez-driesse", _S2),
     ),
 }
 

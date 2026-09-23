@@ -26,3 +26,22 @@ def test_non_selectable_models_are_shown_with_a_reason():
     assert shown == {"dirindex", "campbell_norman", "gti_dirint"}
     assert all(c.reason for c in pool if not c.selectable)
     assert all(c.reason is None for c in pool if c.selectable)
+
+
+STAGE2_POOL_ORDER = [
+    "isotropic",
+    "klucher",
+    "haydavies",
+    "reindl",
+    "king",
+    "perez",
+    "perez-driesse",
+]
+
+
+def test_stage2_pool_is_in_pool_order():
+    assert [c.name for c in stage_pool(Stage.TRANSPOSITION)] == STAGE2_POOL_ORDER
+
+
+def test_stage2_has_no_misfits():
+    assert all(c.selectable and c.reason is None for c in stage_pool(Stage.TRANSPOSITION))

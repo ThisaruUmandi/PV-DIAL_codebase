@@ -41,3 +41,7 @@ stage1:                        # PROVISIONAL — pvlib 0.15.2 values, now explic
   louche:          {max_zenith: 90}
   orgill_hollands: {min_cos_zenith: 0.065, max_zenith: 87}
   dhi_clip_min_w_m2: 0.0       # Decided 23/09: clip + log, every Stage 1 DHI
+
+stage2:
+  albedo_default: 0.2          # PROVISIONAL — pre-filled; user may override (23/09)
+  model_perez: "allsitescomposite1990"   # HELD FIXED (23/09) — pvlib's own default, now explicit
