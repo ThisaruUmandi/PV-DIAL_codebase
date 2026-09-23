@@ -262,3 +262,27 @@ def validate_post_dc(outputs: pd.DataFrame) -> ValidationResult:
     if n_negative:
         result.add_problem(f"DC power has {n_negative} negative value(s).")
     return result
+
+
+def validate_ac_not_exceeding_dc(
+    ac_outputs: pd.DataFrame, dc_outputs: pd.DataFrame, tolerance_w: float = 1e-6
+) -> ValidationResult:
+    """AC power never exceeds DC power (N21's permanent regression guard).
+
+    Run over every selectable Stage 4/Stage 5 combination, not only the
+    singlediode/sandia pairing the original bug was found in.
+    """
+    result = ValidationResult()
+    if not ac_outputs.index.equals(dc_outputs.index):
+        raise ValueError("AC and DC outputs must share the same index.")
+
+    p_ac = ac_outputs["p_ac"].to_numpy(dtype=float)
+    p_dc = dc_outputs["p_dc"].to_numpy(dtype=float)
+    exceeds = p_ac > p_dc + tolerance_w
+    if exceeds.any():
+        first = ac_outputs.index[exceeds][0]
+        result.add_problem(
+            f"AC power exceeds DC power on {int(exceeds.sum())} row(s) "
+            f"(first at {first:%d %b %H:%M})."
+        )
+    return result

@@ -1,9 +1,14 @@
 from pvlib import pvsystem
 
 from pvdials.config import load_defaults
-from pvdials.physics.hardware import CEC, SANDIA, ModuleRecord
+from pvdials.physics.hardware import ADR_INVERTER, CEC, CEC_INVERTER, SANDIA, ModuleRecord
 from pvdials.physics.mounting import resolve_mounting
-from pvdials.physics.registry import stage3_selectable, stage4_selectable, stage_pool
+from pvdials.physics.registry import (
+    stage3_selectable,
+    stage4_selectable,
+    stage5_selectable,
+    stage_pool,
+)
 from pvdials.types import Stage
 
 STAGE1_POOL_ORDER = [
@@ -160,3 +165,44 @@ def test_stage4_pvwatts_dc_selectable_for_both_libraries():
     for module in (CEC_MODULE, SANDIA_MODULE):
         ok, reason = stage4_selectable("pvwatts_dc", module)
         assert ok and reason is None
+
+
+STAGE5_POOL_ORDER = ["sandia", "adr", "pvwatts"]
+
+
+def test_stage5_pool_is_in_pool_order():
+    assert [c.name for c in stage_pool(Stage.AC)] == STAGE5_POOL_ORDER
+
+
+def test_stage5_has_no_static_exclusions():
+    assert all(c.selectable and c.reason is None for c in stage_pool(Stage.AC))
+
+
+def test_stage5_sandia_and_adr_need_v_dc():
+    for model in ("sandia", "adr"):
+        ok, reason = stage5_selectable(model, {CEC_INVERTER, ADR_INVERTER}, dc_has_v_dc=False)
+        assert not ok
+        assert "v_dc" in reason
+
+
+def test_stage5_sandia_needs_cec_inverter_library():
+    ok, reason = stage5_selectable("sandia", {ADR_INVERTER}, dc_has_v_dc=True)
+    assert not ok
+    assert "CECInverter" in reason
+
+    ok, reason = stage5_selectable("sandia", {CEC_INVERTER, ADR_INVERTER}, dc_has_v_dc=True)
+    assert ok and reason is None
+
+
+def test_stage5_adr_needs_adr_inverter_library():
+    ok, reason = stage5_selectable("adr", set(), dc_has_v_dc=True)
+    assert not ok
+    assert "ADRInverter" in reason
+
+    ok, reason = stage5_selectable("adr", {ADR_INVERTER}, dc_has_v_dc=True)
+    assert ok and reason is None
+
+
+def test_stage5_pvwatts_always_selectable():
+    ok, reason = stage5_selectable("pvwatts", set(), dc_has_v_dc=False)
+    assert ok and reason is None

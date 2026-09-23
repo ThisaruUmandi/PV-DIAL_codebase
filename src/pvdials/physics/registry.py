@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pvdials.physics.hardware import CEC, SANDIA, ModuleRecord, has_noct
+from pvdials.physics.hardware import ADR_INVERTER, CEC, CEC_INVERTER, SANDIA, ModuleRecord, has_noct
 from pvdials.physics.mounting import Mounting, sapm_key
 from pvdials.types import Stage
 
@@ -39,6 +39,7 @@ _S1 = Stage.DECOMPOSITION
 _S2 = Stage.TRANSPOSITION
 _S3 = Stage.TEMPERATURE
 _S4 = Stage.DC
+_S5 = Stage.AC
 
 # Reasons for the module- and mounting-dependent Stage 3 models (see stage3_selectable)
 NO_NOCT_REASON = "needs the module's NOCT; the selected module's library doesn't carry it"
@@ -51,6 +52,11 @@ NO_SAPM_MODULE_REASON = (
 NO_CEC_MODULE_REASON = (
     "needs CEC single-diode reference parameters; the selected module's library doesn't carry them"
 )
+
+# Reasons for the runtime-gated Stage 5 models (see stage5_selectable)
+NO_V_DC_REASON = "needs v_dc; the selected DC model doesn't produce it"
+NO_CEC_INVERTER_REASON = "needs a CECInverter entry; the selected inverter isn't in that database"
+NO_ADR_INVERTER_REASON = "needs an ADRInverter entry; the selected inverter isn't in that database"
 
 # Stage 1 fit check, 23/09: Stage 1 takes GHI (plus the shared site context) only.
 # Stage 2 fit check, 23/09: get_total_irradiance() forwards dni_extra/airmass only to
@@ -113,6 +119,14 @@ STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
             "needs gamma_ref, mu_gamma, R_sh_0; not carried by CECMod or SandiaMod",
         ),
     ),
+    # Stage 5 fit check, 23/09: all three are selectable in the static pool — the
+    # gating is entirely runtime (which database(s) carry the chosen inverter name,
+    # and whether the upstream DC model produced v_dc), checked by stage5_selectable().
+    Stage.AC: (
+        _selectable("sandia", _S5),
+        _selectable("adr", _S5),
+        _selectable("pvwatts", _S5),
+    ),
 }
 
 # Stage 3 models gated by the module's NOCT, applying the same rule Umee gave for
@@ -160,4 +174,23 @@ def stage4_selectable(model: str, module: ModuleRecord) -> tuple[bool, str | Non
         return False, NO_SAPM_MODULE_REASON
     if model in _CEC_GATED_MODELS and module.library != CEC:
         return False, NO_CEC_MODULE_REASON
+    return True, None
+
+
+_NEEDS_V_DC_MODELS = {"sandia", "adr"}
+
+
+def stage5_selectable(
+    model: str, inverter_libraries: set[str], dc_has_v_dc: bool
+) -> tuple[bool, str | None]:
+    """Runtime Stage 5 selectability, layered on the static pool (all 3 selectable).
+
+    Assumes `model` already passed the static pool check (get_candidate).
+    """
+    if model in _NEEDS_V_DC_MODELS and not dc_has_v_dc:
+        return False, NO_V_DC_REASON
+    if model == "sandia" and CEC_INVERTER not in inverter_libraries:
+        return False, NO_CEC_INVERTER_REASON
+    if model == "adr" and ADR_INVERTER not in inverter_libraries:
+        return False, NO_ADR_INVERTER_REASON
     return True, None

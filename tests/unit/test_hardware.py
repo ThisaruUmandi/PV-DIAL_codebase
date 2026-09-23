@@ -3,12 +3,15 @@ from pvlib import pvsystem
 
 from pvdials.physics.adapters import AdapterError
 from pvdials.physics.hardware import (
+    ADR_INVERTER,
     CEC,
+    CEC_INVERTER,
     SANDIA,
     ModuleRecord,
     cec_diode_params,
     gamma_pdc,
     has_noct,
+    inverter_libraries,
     module_dimensions,
     module_efficiency,
     noct,
@@ -141,3 +144,30 @@ def test_array_size_resolves_when_both_given():
 
     assert array.modules_per_string == 10
     assert array.strings_per_inverter == 2
+
+
+CEC_INVERTERS = pvsystem.retrieve_sam(CEC_INVERTER)
+ADR_INVERTERS = pvsystem.retrieve_sam(ADR_INVERTER)
+
+
+def test_inverter_libraries_for_a_shared_name():
+    shared_name = CEC_INVERTERS.columns[0]
+
+    assert CEC_INVERTERS.columns[0] in ADR_INVERTERS.columns  # every CEC name is in ADR too
+    libraries = inverter_libraries(shared_name, CEC_INVERTERS, ADR_INVERTERS)
+
+    assert libraries == {CEC_INVERTER, ADR_INVERTER}
+
+
+def test_inverter_libraries_for_an_adr_only_name():
+    adr_only = next(n for n in ADR_INVERTERS.columns if n not in CEC_INVERTERS.columns)
+
+    libraries = inverter_libraries(adr_only, CEC_INVERTERS, ADR_INVERTERS)
+
+    assert libraries == {ADR_INVERTER}
+
+
+def test_inverter_libraries_for_an_unknown_name():
+    libraries = inverter_libraries("not_a_real_inverter", CEC_INVERTERS, ADR_INVERTERS)
+
+    assert libraries == set()

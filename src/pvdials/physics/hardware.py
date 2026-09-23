@@ -15,6 +15,8 @@ from pvdials.physics.adapters import AdapterError
 
 CEC = "CECMod"
 SANDIA = "SandiaMod"
+CEC_INVERTER = "CECInverter"
+ADR_INVERTER = "ADRInverter"
 
 
 @dataclass(frozen=True)
@@ -147,3 +149,34 @@ def resolve_array_size(
             "default (N40)."
         )
     return ArraySize(int(modules_per_string), int(strings_per_inverter))
+
+
+# --- Inverters (Stage 5) ----------------------------------------------------------
+
+@dataclass(frozen=True)
+class InverterRecord:
+    """One entry from pvlib.pvsystem.retrieve_sam(). params is the raw column.
+
+    library: CEC_INVERTER or ADR_INVERTER — which database this record's params
+    came from. A name may exist in both; the caller picks which one to load from
+    depending on the Stage 5 model (KT §7.4: same physical inverter, two datasets).
+    """
+
+    library: str
+    name: str
+    params: pd.Series
+
+
+def inverter_libraries(name: str, cec_inverters: pd.DataFrame, adr_inverters: pd.DataFrame) -> set[str]:
+    """Which inverter database(s) carry this name.
+
+    Every CECInverter name also exists in ADRInverter (checked 23/09: 3,264/3,264
+    overlap), so this is {CEC_INVERTER, ADR_INVERTER} for most names, and
+    {ADR_INVERTER} alone for the ADR-only remainder.
+    """
+    libraries = set()
+    if name in cec_inverters.columns:
+        libraries.add(CEC_INVERTER)
+    if name in adr_inverters.columns:
+        libraries.add(ADR_INVERTER)
+    return libraries

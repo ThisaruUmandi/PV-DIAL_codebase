@@ -72,3 +72,7 @@ stage4:
     calcparams: {EgRef: 1.121, dEgdT: -0.0002677, irrad_ref: 1000, temp_ref: 25}   # HELD FIXED
   pvwatts_dc: {temp_ref: 25.0, k: null, cap_adjustment: false}   # HELD FIXED (k has no source)
   sapm: {temperature_ref: 25, irradiance_ref: 1000}   # HELD FIXED — pvlib defaults
+
+stage5:
+  pvwatts: {eta_inv_nom: 0.96, eta_inv_ref: 0.9637}   # HELD FIXED — pvlib defaults
+  adr: {vtol: 0.1}                                     # HELD FIXED — pvlib default
