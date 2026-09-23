@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum, IntEnum
 
 
@@ -21,3 +22,21 @@ class ExecutionSet(str, Enum):
     ORIGINAL = "original"
     DERIVED = "derived"
     REEXEC = "reexec"
+
+
+@dataclass(frozen=True)
+class PipelineConfig:
+    """One pipeline's model choice at each of the five stages.
+
+    Immutable once created (KT §4): an O4 variant is built from an original,
+    never edited in place. Only the model names vary between A/B/C — the
+    physical/site setup (weather, hardware, geometry) is shared across every
+    pipeline in a comparison (D6, §7.4), so it isn't held here.
+    """
+
+    label: str  # "A", "B", "C", or a variant label later (O4)
+    decomposition_model: str
+    transposition_model: str
+    temperature_model: str
+    dc_model: str
+    ac_model: str
