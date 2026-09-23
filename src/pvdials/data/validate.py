@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 
 # Plausible surface pressure range in Pa (sea level ~101,325; ~5,000 m ~54,000)
@@ -185,4 +186,21 @@ def validate_physical_consistency(
             f"horizon at the hour's start, midpoint and end (first at {first:%d %b %H:%M})."
         )
 
+    return result
+
+def validate_post_decomposition(outputs: pd.DataFrame) -> ValidationResult:
+    """Tier 6: Stage 1 DNI and DHI are finite and >= 0 on every row.
+
+    The Stage 1 adapters already set out-of-guard NaN to 0 and clip negative
+    DHI, so a failure here points to a fault in the adapter, not the data.
+    """
+    result = ValidationResult()
+    for col in ("dni", "dhi"):
+        values = outputs[col].to_numpy(dtype=float)
+        n_nonfinite = int((~np.isfinite(values)).sum())
+        n_negative = int((values < 0).sum())
+        if n_nonfinite:
+            result.add_problem(f"Stage 1 {col.upper()} has {n_nonfinite} non-finite value(s).")
+        if n_negative:
+            result.add_problem(f"Stage 1 {col.upper()} has {n_negative} negative value(s).")
     return result

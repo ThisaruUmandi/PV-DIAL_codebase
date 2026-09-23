@@ -30,3 +30,14 @@ dla:
   tau: 0.05              # PROVISIONAL — justified by sensitivity analysis (A18)
   daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
   daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)
+
+stage1:                        # PROVISIONAL — pvlib 0.15.2 values, now explicit
+  erbs:            {min_cos_zenith: 0.065, max_zenith: 87}
+  erbs_driesse:    {min_cos_zenith: 0.065, max_zenith: 87}
+  disc:            {min_cos_zenith: 0.065, max_zenith: 87, max_airmass: 12}
+  dirint:          {min_cos_zenith: 0.065, max_zenith: 87, use_delta_kt_prime: true,
+                    temp_dew: null}   # temp_dew HELD FIXED (23/09): file-independent
+  boland:          {a_coeff: 8.645, b_coeff: 0.613, min_cos_zenith: 0.065, max_zenith: 87}
+  louche:          {max_zenith: 90}
+  orgill_hollands: {min_cos_zenith: 0.065, max_zenith: 87}
+  dhi_clip_min_w_m2: 0.0       # Decided 23/09: clip + log, every Stage 1 DHI
