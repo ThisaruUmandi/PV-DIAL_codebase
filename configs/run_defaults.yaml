@@ -45,3 +45,22 @@ stage1:                        # PROVISIONAL — pvlib 0.15.2 values, now explic
 stage2:
   albedo_default: 0.2          # PROVISIONAL — pre-filled; user may override (23/09)
   model_perez: "allsitescomposite1990"   # HELD FIXED (23/09) — pvlib's own default, now explicit
+
+stage3:
+  pvsyst_cell:
+    u_c: 29.0             # PROVISIONAL — pvlib "freestanding" default; overridden per mounting
+    u_v: 0.0              # geometry by physics/mounting.py at run time
+    module_efficiency: 0.1    # HELD FIXED — pvlib default. Kept fixed (not module-derived) so
+    alpha_absorption: 0.9     # pvsyst_cell stays available for every module, unconditional
+  faiman:       {u0: 25.0, u1: 6.84}           # PROVISIONAL — pvlib defaults, now explicit
+  fuentes:
+    wind_height_m: 10.0    # PVGIS WS10m measurement height — stated, not pvlib's own default (9.144)
+    emissivity: 0.84       # HELD FIXED — pvlib default, physical constant
+    absorption: 0.83       # HELD FIXED — pvlib default, physical constant
+  noct_sam:
+    transmittance_absorptance: 0.9   # HELD FIXED — pvlib default, physical constant
+    mount_standoff_in: 4             # HELD FIXED — pvlib default ("use if ground-mounted")
+  mounting:
+    geometry_default: "open_rack"        # PROVISIONAL pre-fill (23/09)
+    construction_default: "glass_polymer"  # PROVISIONAL pre-fill (23/09)
+    array_height_default: 1              # PROVISIONAL pre-fill (noct_sam only)

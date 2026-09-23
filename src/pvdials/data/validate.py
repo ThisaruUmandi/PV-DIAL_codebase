@@ -188,6 +188,7 @@ def validate_physical_consistency(
 
     return result
 
+
 def validate_post_decomposition(outputs: pd.DataFrame) -> ValidationResult:
     """Tier 6: Stage 1 DNI and DHI are finite and >= 0 on every row.
 
@@ -221,4 +222,26 @@ def validate_post_transposition(outputs: pd.DataFrame) -> ValidationResult:
         result.add_problem(f"POA global has {n_nonfinite} non-finite value(s).")
     if n_negative:
         result.add_problem(f"POA global has {n_negative} negative value(s).")
+    return result
+
+
+def validate_post_temperature(outputs: pd.DataFrame, weather: pd.DataFrame) -> ValidationResult:
+    """Structural sanity check on Stage 3 output: temp_cell finite, and never
+    far below air temperature. Not one of the KT's six named tiers — catches
+    an adapter fault (a sign or unit slip), not a claim about how the model
+    performs.
+    """
+    result = ValidationResult()
+    temp_cell = outputs["temp_cell"].to_numpy(dtype=float)
+    temp_air = weather["temp_air"].to_numpy(dtype=float)
+
+    n_nonfinite = int((~np.isfinite(temp_cell)).sum())
+    if n_nonfinite:
+        result.add_problem(f"Cell temperature has {n_nonfinite} non-finite value(s).")
+
+    n_too_cold = int((temp_cell < temp_air - 5.0).sum())
+    if n_too_cold:
+        result.add_problem(
+            f"Cell temperature is more than 5 C below air temperature on {n_too_cold} row(s)."
+        )
     return result

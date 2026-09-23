@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from pvdials.physics.hardware import ModuleRecord, has_noct
+from pvdials.physics.mounting import Mounting, sapm_key
 from pvdials.types import Stage
 
 
@@ -35,10 +37,20 @@ def _shown(name: str, stage: Stage, reason: str) -> CandidateModel:
 
 _S1 = Stage.DECOMPOSITION
 _S2 = Stage.TRANSPOSITION
+_S3 = Stage.TEMPERATURE
+
+# Reasons for the module- and mounting-dependent Stage 3 models (see stage3_selectable)
+NO_NOCT_REASON = "needs the module's NOCT; the selected module's library doesn't carry it"
+NO_SAPM_MOUNTING_REASON = "no SAPM coefficient set for this mounting/construction combination"
 
 # Stage 1 fit check, 23/09: Stage 1 takes GHI (plus the shared site context) only.
 # Stage 2 fit check, 23/09: get_total_irradiance() forwards dni_extra/airmass only to
 # the models that need them, so one uniform call fits every candidate — no misfits.
+# Stage 3 fit check, 23/09 (KT §7.2 order): faiman_rad needs IR(h), not in a PVGIS file;
+# generic_linear needs per-installation heat-loss coefficients with no defensible
+# default; prilliman corrects another model's output, not a standalone candidate.
+# fuentes/noct_sam/ross are module-dependent (need NOCT) and sapm_cell is
+# mounting-dependent — both checked per run by stage3_selectable(), not here.
 STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
     Stage.DECOMPOSITION: (
         _selectable("erbs", _S1),
@@ -61,7 +73,27 @@ STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
         _selectable("perez", _S2),
         _selectable("perez-driesse", _S2),
     ),
+    Stage.TEMPERATURE: (
+        _selectable("faiman", _S3),
+        _shown("faiman_rad", _S3, "needs downwelling longwave irradiance (IR(h)); not provided by this file"),
+        _selectable("fuentes", _S3),
+        _shown(
+            "generic_linear",
+            _S3,
+            "needs heat-loss coefficients fitted per installation; no defensible default",
+        ),
+        _selectable("noct_sam", _S3),
+        _shown("prilliman", _S3, "corrects another model's output; not a standalone temperature model"),
+        _selectable("pvsyst_cell", _S3),
+        _selectable("ross", _S3),
+        _selectable("sapm_cell", _S3),
+    ),
 }
+
+# Stage 3 models gated by the module's NOCT, applying the same rule Umee gave for
+# fuentes/noct_sam to ross too (23/09): ross needs noct or k, and k has no source
+# anywhere in this project.
+_NOCT_GATED_MODELS = {"fuentes", "noct_sam", "ross"}
 
 
 def stage_pool(stage: Stage) -> tuple[CandidateModel, ...]:
@@ -74,3 +106,17 @@ def get_candidate(stage: Stage, name: str) -> CandidateModel | None:
         if candidate.name == name:
             return candidate
     return None
+
+
+def stage3_selectable(
+    model: str, module: ModuleRecord, mounting: Mounting
+) -> tuple[bool, str | None]:
+    """Module- and mounting-dependent Stage 3 selectability, layered on the static pool.
+
+    Assumes `model` already passed the static pool check (get_candidate).
+    """
+    if model in _NOCT_GATED_MODELS and not has_noct(module):
+        return False, NO_NOCT_REASON
+    if model == "sapm_cell" and sapm_key(mounting) is None:
+        return False, NO_SAPM_MOUNTING_REASON
+    return True, None
