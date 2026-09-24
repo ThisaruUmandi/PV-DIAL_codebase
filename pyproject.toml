@@ -15,8 +15,7 @@ dependencies = [
     "pyyaml",
     "streamlit",
     "plotly",
-    "sqlalchemy",
-    "psycopg2-binary",
+    "psycopg[binary]",
     "python-dotenv",
     "prov",
 ]

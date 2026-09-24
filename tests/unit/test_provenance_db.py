@@ -1,67 +1,86 @@
 import datetime as dt
 
 import pytest
+from psycopg.types.json import Jsonb
 
-from pvdials.provenance.db import (
-    create_schema,
-    get_engine,
-    is_reachable,
-    provenance_records,
-    stage_output_values,
-)
-
-engine = get_engine()
+from pvdials.provenance.db import get_connection, is_reachable, run_schema
 
 pytestmark = pytest.mark.skipif(
-    not is_reachable(engine),
+    not is_reachable(),
     reason="No local Postgres reachable (DATABASE_URL not set or the service isn't running).",
 )
 
 
 @pytest.fixture(autouse=True)
 def _clean_schema():
-    create_schema(engine)
-    with engine.begin() as conn:
-        conn.execute(stage_output_values.delete())
-        conn.execute(provenance_records.delete())
+    with get_connection() as conn:
+        run_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM stage_output_values")
+            cur.execute("DELETE FROM provenance_records")
+        conn.commit()
     yield
 
 
 def test_stage_output_values_round_trips_jsonb():
     payload = {"dni": [1.0, 2.0, 3.0], "dhi": [0.1, 0.2, 0.3]}
-    with engine.begin() as conn:
-        conn.execute(
-            stage_output_values.insert().values(content_hash="abc123", payload=payload)
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO stage_output_values (content_hash, payload) VALUES (%s, %s)",
+            ("abc123", Jsonb(payload)),
         )
-        row = conn.execute(
-            stage_output_values.select().where(stage_output_values.c.content_hash == "abc123")
-        ).one()
+        conn.commit()
+        cur.execute(
+            "SELECT content_hash, payload, first_seen_at FROM stage_output_values "
+            "WHERE content_hash = %s",
+            ("abc123",),
+        )
+        row = cur.fetchone()
 
-    assert row.content_hash == "abc123"
-    assert row.payload == payload
-    assert isinstance(row.first_seen_at, dt.datetime)
+    assert row[0] == "abc123"
+    assert row[1] == payload
+    assert isinstance(row[2], dt.datetime)
 
 
 def test_provenance_records_round_trips_jsonb():
-    document = {"prefix": {"default": "https://pvdial.example.org/ns#"}, "bundle": {"original": {}}}
-    with engine.begin() as conn:
-        conn.execute(
-            provenance_records.insert().values(
-                id="doc-hash-1", execution_set="original", config_label="A", document=document
-            )
+    document = {"prefix": {"default": "https://pvdial.local/ns#"}, "bundle": {"original": {}}}
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO provenance_records (id, execution_set, config_label, document) "
+            "VALUES (%s, %s, %s, %s)",
+            ("doc-hash-1", "original", "A", Jsonb(document)),
         )
-        row = conn.execute(
-            provenance_records.select().where(provenance_records.c.id == "doc-hash-1")
-        ).one()
+        conn.commit()
+        cur.execute(
+            "SELECT execution_set, config_label, document FROM provenance_records WHERE id = %s",
+            ("doc-hash-1",),
+        )
+        row = cur.fetchone()
 
-    assert row.execution_set == "original"
-    assert row.config_label == "A"
-    assert row.document == document
+    assert row[0] == "original"
+    assert row[1] == "A"
+    assert row[2] == document
 
 
 def test_content_hash_is_the_primary_key():
-    with engine.begin() as conn:
-        conn.execute(stage_output_values.insert().values(content_hash="dupe", payload={"a": 1}))
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO stage_output_values (content_hash, payload) VALUES (%s, %s)",
+            ("dupe", Jsonb({"a": 1})),
+        )
+        conn.commit()
 
-    with pytest.raises(Exception), engine.begin() as conn:  # noqa: B017 - IntegrityError, driver-specific
-        conn.execute(stage_output_values.insert().values(content_hash="dupe", payload={"a": 2}))
+    with pytest.raises(Exception), get_connection() as conn, conn.cursor() as cur:  # noqa: B017 - IntegrityError, driver-specific
+        cur.execute(
+            "INSERT INTO stage_output_values (content_hash, payload) VALUES (%s, %s)",
+            ("dupe", Jsonb({"a": 2})),
+        )
+        conn.commit()
+
+
+def test_index_exists_on_provenance_records():
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT indexname FROM pg_indexes WHERE tablename = 'provenance_records'")
+        indexes = {row[0] for row in cur.fetchall()}
+
+    assert "provenance_records_execution_set_config_label_idx" in indexes

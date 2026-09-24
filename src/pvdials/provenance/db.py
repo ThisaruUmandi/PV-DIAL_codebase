@@ -1,5 +1,9 @@
 """Connection and schema for the provenance store (KT §11: PostgreSQL/Neon).
 
+Plain psycopg (v3), no ORM: two flat, fixed tables don't need a query-builder
+layer, and every statement stays literal enough to quote directly in the
+dissertation appendix. schema.sql holds the actual DDL, version-controlled.
+
 Local development runs against a local Postgres (installed via Homebrew, no
 Docker in this environment) with the exact same JSONB/GIN behaviour a real
 Neon connection would have — switching to Neon later is a DATABASE_URL
@@ -9,63 +13,47 @@ change only, no query rewrites.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
+import psycopg
 from dotenv import load_dotenv
-from sqlalchemy import Column, DateTime, MetaData, String, Table, create_engine, func
-from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.engine import Engine
+from psycopg import Connection
 
 load_dotenv()
 
+SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+
 # Local dev default: Homebrew Postgres uses peer/trust auth for the OS user,
 # no password. Overridden by DATABASE_URL (.env) for anything else, Neon included.
-DEFAULT_DATABASE_URL = "postgresql+psycopg2://localhost:5432/pvdials_dev"
-
-metadata = MetaData()
-
-# Keyed by content hash, not by (config, stage): values shared upstream of the
-# first differing model (most of the eventual derived configurations, per N19)
-# are stored once regardless of how many configs produced them.
-stage_output_values = Table(
-    "stage_output_values",
-    metadata,
-    Column("content_hash", String, primary_key=True),
-    Column("payload", JSONB, nullable=False),
-    Column("first_seen_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-)
-
-# One row per run_pipeline() call (B5: written after, not during). Keyed by the
-# document's own content hash for the same de-duplication reason as above.
-provenance_records = Table(
-    "provenance_records",
-    metadata,
-    Column("id", String, primary_key=True),
-    Column("execution_set", String, nullable=False),
-    Column("config_label", String, nullable=False),
-    Column("document", JSONB, nullable=False),
-    Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
-)
+DEFAULT_DATABASE_URL = "postgresql://localhost:5432/pvdials_dev"
 
 
-def get_engine(database_url: str | None = None) -> Engine:
-    """A SQLAlchemy engine for the provenance store."""
+def get_connection(database_url: str | None = None) -> Connection:
+    """A psycopg connection to the provenance store."""
     url = database_url or os.environ.get("DATABASE_URL", DEFAULT_DATABASE_URL)
-    return create_engine(url)
+    # SQLAlchemy-style URLs ("postgresql+psycopg2://...") may still be in an
+    # old .env; psycopg takes a plain "postgresql://" URL.
+    url = url.replace("postgresql+psycopg2://", "postgresql://").replace(
+        "postgresql+psycopg://", "postgresql://"
+    )
+    return psycopg.connect(url)
 
 
-def create_schema(engine: Engine) -> None:
-    """Create both tables if they don't already exist."""
-    metadata.create_all(engine)
+def run_schema(conn: Connection) -> None:
+    """Create both tables (and the index) if they don't already exist."""
+    with conn.cursor() as cur:
+        cur.execute(SCHEMA_PATH.read_text(encoding="utf-8"))
+    conn.commit()
 
 
-def is_reachable(engine: Engine) -> bool:
+def is_reachable(database_url: str | None = None) -> bool:
     """True if the database can actually be connected to right now.
 
     Used by tests to skip gracefully rather than fail when no local Postgres
     is running — the rest of the suite stays green in any environment.
     """
     try:
-        with engine.connect():
+        with get_connection(database_url):
             return True
     except Exception:  # noqa: BLE001 - reachability probe, any failure means "not reachable"
         return False
