@@ -45,6 +45,16 @@ def _to_native(value):
     return value
 
 
+def unwrap_value(attribute):
+    """Unwrap PROV-JSON's typed-literal form ({"$": ..., "type": "xsd:..."})
+    for anything non-string — the spec's own convention (keeps the XSD type
+    visible for anything that isn't a plain string), not a quirk of this
+    module. Reused by replay.py when reading values back out of a stored
+    document, and by tests.
+    """
+    return attribute["$"] if isinstance(attribute, dict) and "$" in attribute else attribute
+
+
 def _flatten_records(records: dict) -> dict:
     """Flatten one level of nesting (records['coefficients']['u0'] ->
     'coefficients.u0'), coercing every leaf to a native type.
@@ -63,19 +73,26 @@ def _flatten_records(records: dict) -> dict:
 
 
 def hash_dataframe(df: pd.DataFrame) -> tuple[str, dict]:
-    """Content hash and JSON-serializable payload for a stage output DataFrame.
+    """Content hash and JSON-serializable payload for any DataFrame (a stage
+    output, or the weather input, which — unlike every stage output — has a
+    non-numeric `timestamp_original` column, checked 24/09).
 
     payload: {"index": [...ISO-8601...], <column>: [...values...], ...}.
     NaN -> None before serializing: plain json.dumps accepts NaN (not valid
-    JSON), but Postgres's JSONB column rejects it.
+    JSON), but Postgres's JSONB column rejects it. A pd.Timestamp value (e.g.
+    weather's timestamp_original column) -> its own ISO-8601 string, the same
+    treatment as the index.
     """
     payload: dict = {"index": [ts.isoformat() for ts in df.index]}
     for col in df.columns:
         values = []
         for v in df[col].tolist():
-            v = _to_native(v)
-            if isinstance(v, float) and math.isnan(v):
-                v = None
+            if isinstance(v, pd.Timestamp):
+                v = v.isoformat()
+            else:
+                v = _to_native(v)
+                if isinstance(v, float) and math.isnan(v):
+                    v = None
             values.append(v)
         payload[col] = values
 
@@ -141,9 +158,11 @@ def build_document(
         site_context.add_attributes({f"site_sources.{field}": source})
     bundle.wasAttributedTo(site_context, pvdial)
 
+    weather_hash, _ = hash_dataframe(shared.weather)
     weather = bundle.entity(
         "weather",
         {
+            "content_hash": weather_hash,
             "rows": len(shared.weather),
             "start": shared.weather.index[0].isoformat(),
             "end": shared.weather.index[-1].isoformat(),

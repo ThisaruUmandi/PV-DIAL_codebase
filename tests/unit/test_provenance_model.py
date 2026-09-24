@@ -71,6 +71,18 @@ def test_document_has_the_three_agents():
     assert agents["pvlib"]["version"] == "0.15.2"
 
 
+def test_weather_entity_carries_its_own_content_hash():
+    # 7.4 (replay) needs to recover the weather input from the record alone,
+    # not just its rows/start/end.
+    config, shared, result = _real_run()
+    document = build_document(config, shared, result)
+
+    parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
+    expected_hash, _ = hash_dataframe(shared.weather)
+
+    assert parsed["entity"]["weather"]["content_hash"] == expected_hash
+
+
 def test_lineage_chain_resolves_end_to_end():
     config, shared, result = _real_run()
     document = build_document(config, shared, result)

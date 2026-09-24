@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import pandas as pd
+from pvlib import pvsystem
 
 from pvdials.physics.adapters import AdapterError
 
@@ -180,3 +181,20 @@ def inverter_libraries(name: str, cec_inverters: pd.DataFrame, adr_inverters: pd
     if name in adr_inverters.columns:
         libraries.add(ADR_INVERTER)
     return libraries
+
+
+def load_module(library: str, name: str) -> ModuleRecord:
+    """Load a module by library + name from pvlib's own database.
+
+    A thin wrapper around pvsystem.retrieve_sam() — the single place outside
+    the adapters that needs to touch pvlib's static databases directly (e.g.
+    provenance/replay.py, rebuilding a ModuleRecord from a stored record).
+    """
+    params = pvsystem.retrieve_sam(library)[name]
+    return ModuleRecord(library, name, params)
+
+
+def load_inverter(library: str, name: str) -> InverterRecord:
+    """Load an inverter by library + name from pvlib's own database. See load_module()."""
+    params = pvsystem.retrieve_sam(library)[name]
+    return InverterRecord(library, name, params)
