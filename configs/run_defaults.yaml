@@ -27,7 +27,8 @@ extraterrestrial:
   solar_constant_w_m2: 1366.1
 
 dla:
-  tau: 0.05              # PROVISIONAL — justified by sensitivity analysis (A18)
+  tau: 0.05              # PROVISIONAL — a placeholder only; no sensitivity analysis has been run
+                          # yet (N33/N34, experiments/). Not to be read as justified until it has.
   daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
   daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)
 
