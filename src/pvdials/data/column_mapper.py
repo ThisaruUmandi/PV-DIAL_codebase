@@ -162,6 +162,13 @@ def detect_site_metadata(preamble: list[str], df: pd.DataFrame) -> SiteMetadata:
     return site
 
 
+# Named presets for the offset picker (25/09) — convenience labels only. Any
+# numeric value is still accepted (some sources, e.g. SARAH, use offsets like
+# 0.1761), so these are two labelled starting points, not an enum.
+PRESET_HOUR_START_H = 0.0
+PRESET_HOUR_CENTRE_H = 0.5
+
+
 @dataclass
 class TimeOffset:
     """Offset (hours) from each timestamp to the time its irradiance value represents.
@@ -169,23 +176,31 @@ class TimeOffset:
     PVGIS states it in the header ("Irradiance Time Offset (h): 0.5").
     source: TAG_FILE, TAG_ASSUMED_ABSENT or TAG_USER_ENTERED
     notice: text shown to the user when the offset was assumed, else None
+    override_reason: the user's own stated reason for a TAG_USER_ENTERED value
+    (e.g. "header states 0.5 h; file day/night content aligns with 0 h"),
+    distinct from notice (which is the system telling the user something).
+    None unless the user gives one.
     """
 
     value_h: float
     source: str
     notice: str | None = None
+    override_reason: str | None = None
 
-    def set_user_value(self, value_h: float) -> None:
+    def set_user_value(self, value_h: float, reason: str | None = None) -> None:
         self.value_h = float(value_h)
         self.source = TAG_USER_ENTERED
         self.notice = None
+        self.override_reason = reason
 
 
 def detect_time_offset(preamble: list[str]) -> TimeOffset:
     """Read the irradiance time offset from the preamble.
 
     If the header doesn't state one, 0 h is assumed — recorded as an
-    assumption, with a notice for the user, who may override it.
+    assumption, with a notice for the user, who may override it. Header-
+    driven behaviour is unchanged (25/09): this stays the default; presets
+    and the consistency check (physics/site.py) are additive, opt-in inputs.
     """
     value = _from_preamble(preamble, TIME_OFFSET_ALIASES)
     if value is None:

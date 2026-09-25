@@ -256,3 +256,47 @@ def build_site_context(
         notices=tuple(notices),
         settings=MappingProxyType(settings),
     )
+
+
+@dataclass(frozen=True)
+class OffsetCandidate:
+    """One candidate offset's day/night consistency counts, for the picker
+    screen to show before the user confirms which offset to use (25/09,
+    the HH:30 vs HH:00 finding from Tier 4).
+    """
+
+    label: str
+    value_h: float
+    ghi_positive_sun_down: int  # Tier 4's own mismatch: GHI > 0, sun below horizon
+    ghi_zero_sun_up: int  # the reverse: GHI == 0 inside the daylight mask
+
+
+def offset_consistency_report(
+    weather: pd.DataFrame,
+    site: SiteMetadata,
+    candidates: dict[str, float],
+    defaults: dict | None = None,
+) -> tuple[OffsetCandidate, ...]:
+    """Day/night mismatch counts for each candidate offset, so the user can
+    compare (e.g. the header value against the hour-start/hour-centre
+    presets) before confirming one. Additive, opt-in: never called
+    automatically, never changes what detect_time_offset()/build_site_context()
+    do on their own.
+
+    Reuses build_site_context() for each candidate (one build per candidate,
+    negligible cost) rather than a parallel solar-position computation, so
+    the solar-position-only-in-site.py guard and every existing SiteContext
+    test still cover this path.
+    """
+    results = []
+    for label, value_h in candidates.items():
+        candidate_ctx = build_site_context(
+            weather, site, TimeOffset(value_h, TAG_USER_ENTERED), defaults
+        )
+        zenith = candidate_ctx.solpos["zenith"]
+        ghi_positive_sun_down = int(((weather["ghi"] > 0) & (zenith >= 90)).sum())
+        ghi_zero_sun_up = int(((weather["ghi"] == 0) & candidate_ctx.daylight).sum())
+        results.append(
+            OffsetCandidate(label, value_h, ghi_positive_sun_down, ghi_zero_sun_up)
+        )
+    return tuple(results)

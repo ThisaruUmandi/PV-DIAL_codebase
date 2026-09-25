@@ -21,6 +21,7 @@ from pvdials.physics.site import (
     TAG_FIXED_STANDARD,
     SiteContextError,
     build_site_context,
+    offset_consistency_report,
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -159,3 +160,35 @@ def test_airmass_and_dni_extra_defined_on_daylight_rows():
 
     assert ctx.airmass_relative[ctx.daylight].notna().all()
     assert (ctx.dni_extra > 1300).all()
+
+
+def test_offset_consistency_report_does_not_mutate_the_detected_offset():
+    # additive, opt-in: building the report never changes the header-driven
+    # TimeOffset the caller already has, and never affects a later call to
+    # build_site_context() with that same original offset.
+    weather, site, offset = _from_fixture()
+
+    offset_consistency_report(weather, site, {"header": offset.value_h, "hour_start": 0.0})
+
+    assert offset.value_h == 0.5  # the fixture's real header value, untouched
+    assert offset.source == TAG_FILE
+    ctx = build_site_context(weather, site, offset)
+    assert ctx.time_offset_h == 0.5
+
+
+def test_offset_consistency_report_counts_both_mismatch_directions():
+    weather, site, _ = _from_fixture()
+
+    report = offset_consistency_report(
+        weather, site, {"header": 0.5, "hour_start": 0.0, "hour_centre": 0.5}
+    )
+
+    labels = [c.label for c in report]
+    assert labels == ["header", "hour_start", "hour_centre"]
+    for candidate in report:
+        assert candidate.ghi_positive_sun_down >= 0
+        assert candidate.ghi_zero_sun_up >= 0
+    # header and hour_centre are the same numeric value on this fixture
+    header, _, hour_centre = report
+    assert header.ghi_positive_sun_down == hour_centre.ghi_positive_sun_down
+    assert header.ghi_zero_sun_up == hour_centre.ghi_zero_sun_up

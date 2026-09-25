@@ -4,6 +4,8 @@ import pandas as pd
 
 from pvdials.data.column_mapper import (
     FROM_CSV,
+    PRESET_HOUR_CENTRE_H,
+    PRESET_HOUR_START_H,
     TAG_ASSUMED_ABSENT,
     TAG_FILE,
     TAG_USER_ENTERED,
@@ -110,3 +112,19 @@ def test_time_offset_user_override_is_tagged():
     assert offset.value_h == 0.25
     assert offset.source == TAG_USER_ENTERED
     assert offset.notice is None
+    assert offset.override_reason is None
+
+
+def test_time_offset_user_override_can_carry_a_reason():
+    offset = detect_time_offset([])
+
+    offset.set_user_value(0.0, reason="header states 0.5 h; file day/night content aligns with 0 h")
+
+    assert offset.value_h == 0.0
+    assert offset.source == TAG_USER_ENTERED
+    assert offset.override_reason == "header states 0.5 h; file day/night content aligns with 0 h"
+
+
+def test_presets_reconstruct_the_named_offsets():
+    assert PRESET_HOUR_START_H == 0.0
+    assert PRESET_HOUR_CENTRE_H == 0.5
