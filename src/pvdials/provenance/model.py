@@ -102,12 +102,18 @@ def hash_dataframe(df: pd.DataFrame) -> tuple[str, dict]:
 
 
 def build_document(
-    config: PipelineConfig, shared: SharedInputs, result: PipelineResult
+    config: PipelineConfig, shared: SharedInputs, result: PipelineResult, execution_set: str
 ) -> ProvDocument:
-    """Build one PROV document for a completed run_pipeline() call."""
+    """Build one PROV document for a completed run_pipeline() call.
+
+    execution_set: one of ExecutionSet's values (KT §4, N10) -- "original"
+    for a user-configured pipeline, "derived" for Phase 3's coalition runs,
+    "reexec" for O4's guided re-execution attempts. Named for the bundle, so
+    the three execution sets are distinguishable in the record itself.
+    """
     document = ProvDocument()
     document.set_default_namespace(NAMESPACE)
-    bundle = document.bundle("original")  # TODO: name from ExecutionSet once derived/reexec exist
+    bundle = document.bundle(execution_set)
     bundle.set_default_namespace(NAMESPACE)
 
     user = bundle.agent("user", {"prov:type": "Person"})

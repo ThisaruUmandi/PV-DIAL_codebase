@@ -15,17 +15,25 @@ from psycopg.types.json import Jsonb
 from pvdials.physics.pipeline import PipelineResult, SharedInputs
 from pvdials.provenance.db import get_connection
 from pvdials.provenance.model import build_document, hash_dataframe
-from pvdials.types import PipelineConfig
-
-# Hardcoded for now, consistent with build_document's bundle name — nothing
-# else exists yet (derived/reexec sets are Steps 9/10). One open TODO, not two.
-EXECUTION_SET = "original"
+from pvdials.types import ExecutionSet, PipelineConfig
 
 _STAGES = ("decomposition", "transposition", "temperature", "dc", "ac")
 
 
-def record(config: PipelineConfig, shared: SharedInputs, result: PipelineResult) -> str:
+def record(
+    config: PipelineConfig,
+    shared: SharedInputs,
+    result: PipelineResult,
+    execution_set: str = ExecutionSet.ORIGINAL.value,
+) -> str:
     """Record one completed run_pipeline() call. Returns the document's id.
+
+    execution_set: one of ExecutionSet's values -- ORIGINAL (default, a
+    user-configured pipeline), DERIVED (Phase 3's coalition runs) or REEXEC
+    (O4's guided re-execution attempts, including discarded retries). Every
+    caller now passes this explicitly where it isn't the default, so the
+    three execution sets are distinguishable in the record (KT §4, N10;
+    closes the O2 gap where Phase 3's derived runs weren't recorded at all).
 
     Each stage output is content-hash-deduplicated into stage_output_values
     (Postgres's own ON CONFLICT DO NOTHING, not a manual check-then-insert) —
@@ -54,14 +62,20 @@ def record(config: PipelineConfig, shared: SharedInputs, result: PipelineResult)
                 (content_hash, Jsonb(payload)),
             )
 
-        document = build_document(config, shared, result)
+        document = build_document(config, shared, result, execution_set)
         document_json = document.serialize(format="json")
         document_id = hashlib.sha256(document_json.encode("utf-8")).hexdigest()
         cur.execute(
             "INSERT INTO provenance_records (id, execution_set, config_label, document) "
             "VALUES (%s, %s, %s, %s) ON CONFLICT (id) DO NOTHING",
-            (document_id, EXECUTION_SET, config.label, Jsonb(json.loads(document_json))),
+            (document_id, execution_set, config.label, Jsonb(json.loads(document_json))),
         )
         conn.commit()
 
     return document_id
+
+
+
+
+
+

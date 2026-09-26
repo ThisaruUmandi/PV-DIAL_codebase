@@ -40,7 +40,8 @@ from pvdials.dla.metrics import stage_series
 from pvdials.physics.hardware import ADR_INVERTER, CEC_INVERTER
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.registry import dc_model_produces_v_dc, stage5_selectable
-from pvdials.types import PipelineConfig, Stage
+from pvdials.provenance.recorder import record as record_provenance
+from pvdials.types import ExecutionSet, PipelineConfig, Stage
 
 ALL_STAGES: tuple[Stage, ...] = tuple(Stage)
 
@@ -173,6 +174,12 @@ def _coalition_series_cache(
     the RMSD-based v and the MBD-based signed v (N2) read from this same
     cache -- a direction's 30 non-trivial pipelines are never re-run per
     metric.
+
+    Every non-trivial coalition's run is recorded as ExecutionSet.DERIVED,
+    the same content-hash-deduplicated way an original run is (KT §4, N10;
+    O2's reconstructibility requires every execution, including Phase 3's,
+    to be recoverable from the record) -- this requires a reachable
+    Postgres, same as any other recorded run.
     """
     full_set = frozenset(ALL_STAGES)
     cache: dict[frozenset[Stage], pd.Series] = {}
@@ -186,6 +193,7 @@ def _coalition_series_cache(
             derived_config = build_derived_config(config_anchor, config_other, coalition, label)
             shared = _shared_for(derived_config, shared_cec, shared_adr)
             derived_result = run_pipeline(derived_config, shared, defaults)
+            record_provenance(derived_config, shared, derived_result, ExecutionSet.DERIVED.value)
             cache[coalition] = stage_series(derived_result.outputs, Stage.AC, daylight)
     return cache
 

@@ -28,8 +28,14 @@ from pvdials.physics.hardware import CEC, ArraySize, ModuleRecord
 from pvdials.physics.mounting import resolve_mounting
 from pvdials.physics.pipeline import SharedInputs, run_pipeline
 from pvdials.physics.site import build_site_context
+from pvdials.provenance.db import is_reachable
 from pvdials.types import PipelineConfig, Stage
 from tests.unit.test_pool_validity import HYBRID_VALIDITY_CASES
+
+requires_postgres = pytest.mark.skipif(
+    not is_reachable(),
+    reason="No local Postgres reachable (DATABASE_URL not set or the service isn't running).",
+)
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -175,6 +181,7 @@ def test_run_phase3_returns_not_computable_without_running_any_pipeline(monkeypa
 # --- run_phase3: real end-to-end, N32 efficiency, signed sensitivity check -------
 
 
+@requires_postgres
 def test_run_phase3_real_end_to_end_satisfies_efficiency_and_reports_signed_sensitivity():
     shared = _shared()
     defaults = load_defaults()
@@ -211,3 +218,42 @@ def test_run_phase3_real_end_to_end_satisfies_efficiency_and_reports_signed_sens
     for stage in ALL_STAGES:
         assert result.share[stage] is not None
         assert math.isfinite(result.share[stage])
+
+
+@requires_postgres
+def test_run_phase3_records_every_derived_run_as_execution_set_derived():
+    """Closes the O2 gap: Phase 3's derived-pipeline runs must be
+    reconstructible from the record, same as an original run_pipeline() call.
+    """
+    from pvdials.provenance.db import get_connection, run_schema
+    from pvdials.types import ExecutionSet
+
+    with get_connection() as conn:
+        run_schema(conn)
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM stage_output_values")
+            cur.execute("DELETE FROM provenance_records")
+        conn.commit()
+
+    shared = _shared()
+    defaults = load_defaults()
+    result_a = run_pipeline(CONFIG_A, shared, defaults)
+    result_b = run_pipeline(CONFIG_B, shared, defaults)
+
+    run_phase3(
+        CONFIG_A, result_a, CONFIG_B, result_b,
+        shared_cec=shared, shared_adr=shared,
+        daylight=shared.ctx.daylight, defaults=defaults,
+    )
+
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT config_label FROM provenance_records WHERE execution_set = %s",
+            (ExecutionSet.DERIVED.value,),
+        )
+        labels = [row[0] for row in cur.fetchall()]
+
+    derived_labels = [label for label in labels if label.startswith("_derived_")]
+
+    # 30 non-trivial coalitions per direction x 2 directions = 60 derived runs.
+    assert len(derived_labels) == 60

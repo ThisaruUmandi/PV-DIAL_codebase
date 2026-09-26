@@ -17,7 +17,7 @@ from pvdials.physics.mounting import resolve_mounting
 from pvdials.physics.pipeline import SharedInputs, run_pipeline
 from pvdials.physics.site import build_site_context
 from pvdials.provenance.model import NAMESPACE, _to_native, build_document, hash_dataframe
-from pvdials.types import PipelineConfig
+from pvdials.types import ExecutionSet, PipelineConfig
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -62,7 +62,7 @@ def _real_run():
 
 def test_document_has_the_three_agents():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))
     agents = parsed["bundle"]["original"]["agent"]
@@ -75,7 +75,7 @@ def test_weather_entity_carries_its_own_content_hash():
     # 7.4 (replay) needs to recover the weather input from the record alone,
     # not just its rows/start/end.
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     expected_hash, _ = hash_dataframe(shared.weather)
@@ -85,7 +85,7 @@ def test_weather_entity_carries_its_own_content_hash():
 
 def test_lineage_chain_resolves_end_to_end():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     used_by = {}
@@ -103,7 +103,7 @@ def test_lineage_chain_resolves_end_to_end():
 
 def test_configuration_entity_carries_source_tags_not_just_values():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     configuration = parsed["entity"]["configuration"]
@@ -115,7 +115,7 @@ def test_configuration_entity_carries_source_tags_not_just_values():
 
 def test_site_context_entity_carries_flattened_site_sources():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     site_context = parsed["entity"]["site_context"]
@@ -126,7 +126,7 @@ def test_site_context_entity_carries_flattened_site_sources():
 
 def test_stage_entities_carry_their_records_flattened_and_hashed():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     entities = parsed["entity"]
@@ -141,7 +141,7 @@ def test_stage_entities_carry_their_records_flattened_and_hashed():
 
 def test_document_serializes_to_valid_json_and_provn():
     config, shared, result = _real_run()
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     as_json = document.serialize(format="json")
     parsed = json.loads(as_json)  # raises if not valid JSON
@@ -194,7 +194,7 @@ def test_document_still_serializes_with_a_coerced_numpy_value_in_records():
     config, shared, result = _real_run()
     result.outputs.decomposition.records["probe"] = np.float64(2.5)
 
-    document = build_document(config, shared, result)
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
 
     parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
     probe = float(_value(parsed["entity"]["decomposition"]["probe"]))

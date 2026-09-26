@@ -14,8 +14,8 @@ from pvdials.physics.pipeline import SharedInputs, run_pipeline
 from pvdials.physics.site import build_site_context
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
 from pvdials.provenance.model import hash_dataframe
-from pvdials.provenance.recorder import EXECUTION_SET, record
-from pvdials.types import PipelineConfig
+from pvdials.provenance.recorder import record
+from pvdials.types import ExecutionSet, PipelineConfig
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -122,9 +122,9 @@ def test_recorded_document_round_trips_from_postgres():
         )
         row = cur.fetchone()
 
-    assert row[0] == EXECUTION_SET
+    assert row[0] == ExecutionSet.ORIGINAL.value
     assert row[1] == "A"
-    assert row[2]["bundle"][EXECUTION_SET]["entity"]["configuration"]["label"] == "A"
+    assert row[2]["bundle"][ExecutionSet.ORIGINAL.value]["entity"]["configuration"]["label"] == "A"
 
 
 def test_stage_output_payload_round_trips_from_postgres():
