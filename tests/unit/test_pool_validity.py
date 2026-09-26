@@ -212,23 +212,27 @@ def test_only_stage5_selectable_depends_on_another_stages_chosen_model():
     ]
 
 
-@pytest.mark.parametrize(
-    "dc_model,ac_model,expected_ok",
-    [
-        ("pvwatts_dc", "sandia", False),
-        ("pvwatts_dc", "adr", False),
-        ("pvwatts_dc", "pvwatts", True),
-        ("sapm", "sandia", True),
-        ("sapm", "adr", True),
-        ("sapm", "pvwatts", True),
-        ("singlediode_desoto", "sandia", True),
-        ("singlediode_desoto", "adr", True),
-        ("singlediode_desoto", "pvwatts", True),
-        ("singlediode_cec", "sandia", True),
-        ("singlediode_cec", "adr", True),
-        ("singlediode_cec", "pvwatts", True),
-    ],
-)
+# The full (Stage 4, Stage 5) hybrid-validity table: 2 invalid out of 12, both
+# from pvwatts_dc's lack of v_dc. Shared with tests/dla/test_phase3.py (imported
+# there, not retyped), so Phase 3's own hybrid-validity tests can't silently
+# diverge from this table.
+HYBRID_VALIDITY_CASES = [
+    ("pvwatts_dc", "sandia", False),
+    ("pvwatts_dc", "adr", False),
+    ("pvwatts_dc", "pvwatts", True),
+    ("sapm", "sandia", True),
+    ("sapm", "adr", True),
+    ("sapm", "pvwatts", True),
+    ("singlediode_desoto", "sandia", True),
+    ("singlediode_desoto", "adr", True),
+    ("singlediode_desoto", "pvwatts", True),
+    ("singlediode_cec", "sandia", True),
+    ("singlediode_cec", "adr", True),
+    ("singlediode_cec", "pvwatts", True),
+]
+
+
+@pytest.mark.parametrize("dc_model,ac_model,expected_ok", HYBRID_VALIDITY_CASES)
 def test_hybrid_validity_full_enumeration(dc_model, ac_model, expected_ok):
     """The exact hybrid-validity table Phase 3 relies on: 2 invalid
     combinations out of 12, both from pvwatts_dc's lack of v_dc. Asserts the
