@@ -1,3 +1,4 @@
+import inspect
 from pathlib import Path
 
 import pytest
@@ -189,3 +190,58 @@ def test_dc_model_produces_v_dc_matches_the_adapters_real_output(model):
 
     actually_has_v_dc = "v_dc" in dc.outputs.columns
     assert actually_has_v_dc == dc_model_produces_v_dc(model)
+
+
+def test_only_stage5_selectable_depends_on_another_stages_chosen_model():
+    """Guard for Phase 3 (Shapley hybrid-validity rule, KT Step 9): the DC->AC
+    v_dc dependency is the only cross-stage-model dependency in the registry
+    (KT S7.5 filter 2). stage3_selectable/stage4_selectable take only
+    hardware (module, mounting) alongside their own model name -- never
+    another stage's model or a value derived from it. stage5_selectable is
+    the sole exception (dc_has_v_dc). If a future change adds a new
+    cross-stage-derived parameter anywhere here, this signature snapshot
+    breaks first, rather than Phase 3's invalid-coalition rule going stale
+    silently.
+    """
+    assert list(inspect.signature(stage3_selectable).parameters) == ["model", "module", "mounting"]
+    assert list(inspect.signature(stage4_selectable).parameters) == ["model", "module"]
+    assert list(inspect.signature(stage5_selectable).parameters) == [
+        "model",
+        "inverter_libraries",
+        "dc_has_v_dc",
+    ]
+
+
+@pytest.mark.parametrize(
+    "dc_model,ac_model,expected_ok",
+    [
+        ("pvwatts_dc", "sandia", False),
+        ("pvwatts_dc", "adr", False),
+        ("pvwatts_dc", "pvwatts", True),
+        ("sapm", "sandia", True),
+        ("sapm", "adr", True),
+        ("sapm", "pvwatts", True),
+        ("singlediode_desoto", "sandia", True),
+        ("singlediode_desoto", "adr", True),
+        ("singlediode_desoto", "pvwatts", True),
+        ("singlediode_cec", "sandia", True),
+        ("singlediode_cec", "adr", True),
+        ("singlediode_cec", "pvwatts", True),
+    ],
+)
+def test_hybrid_validity_full_enumeration(dc_model, ac_model, expected_ok):
+    """The exact hybrid-validity table Phase 3 relies on: 2 invalid
+    combinations out of 12, both from pvwatts_dc's lack of v_dc. Asserts the
+    Stage 4/5 selectable pool sizes first, so a model added to either pool
+    later can't silently fall outside this enumeration unnoticed.
+    """
+    stage4_models = [c.name for c in stage_pool(Stage.DC) if c.selectable]
+    stage5_models = [c.name for c in stage_pool(Stage.AC) if c.selectable]
+    assert len(stage4_models) == 4
+    assert len(stage5_models) == 3
+
+    dc_has_v_dc = dc_model_produces_v_dc(dc_model)
+    ok, reason = stage5_selectable(ac_model, {CEC_INVERTER, ADR_INVERTER}, dc_has_v_dc)
+
+    assert ok == expected_ok
+    assert (reason is None) == expected_ok

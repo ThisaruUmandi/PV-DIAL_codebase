@@ -27,8 +27,14 @@ extraterrestrial:
   solar_constant_w_m2: 1366.1
 
 dla:
-  tau: 0.05              # PROVISIONAL — a placeholder only; no sensitivity analysis has been run
-                          # yet (N33/N34, experiments/). Not to be read as justified until it has.
+  tau: 0.234             # N34 (experiments/tau_calibration/), per N33's pre-registered selection
+                          # rule: smallest candidate width >= 0.02 clearing stable_fraction >= 0.99.
+                          # This plateau (centre 0.234) replicated identically across independent
+                          # ensemble sizes (n=100/300/1000/2058) and independent seeds (n=1000 at
+                          # seed=0 and seed=1) — six confirming runs, none contradicting. A finer-
+                          # grained candidate (tau ~ 0.09-0.10) also exists but isn't used here;
+                          # n=100 could not resolve it reliably (0.011-0.229 across draws), which is
+                          # why it's reported separately rather than configured.
   daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
   daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)
 
