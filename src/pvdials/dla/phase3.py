@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import itertools
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pandas as pd
@@ -40,6 +41,7 @@ from pvdials.dla.metrics import stage_series
 from pvdials.physics.hardware import ADR_INVERTER, CEC_INVERTER
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.registry import dc_model_produces_v_dc, stage5_selectable
+from pvdials.physics.shared_inputs import shared_inputs_for
 from pvdials.provenance.recorder import record as record_provenance
 from pvdials.types import ExecutionSet, PipelineConfig, Stage
 
@@ -152,10 +154,6 @@ def shapley_values(
     return phi
 
 
-def _shared_for(config: PipelineConfig, shared_cec: SharedInputs, shared_adr: SharedInputs) -> SharedInputs:
-    return shared_adr if config.ac_model == "adr" else shared_cec
-
-
 def _coalition_series_cache(
     config_anchor: PipelineConfig,
     result_anchor: PipelineResult,
@@ -165,6 +163,7 @@ def _coalition_series_cache(
     shared_adr: SharedInputs,
     defaults: dict,
     daylight: pd.Series,
+    on_record: Callable[[str], None] | None = None,
 ) -> dict[frozenset[Stage], pd.Series]:
     """Final-AC, daylight-masked series for every one of the 32 coalitions,
     in one direction (config_anchor fixed), computed exactly once.
@@ -179,7 +178,10 @@ def _coalition_series_cache(
     the same content-hash-deduplicated way an original run is (KT §4, N10;
     O2's reconstructibility requires every execution, including Phase 3's,
     to be recoverable from the record) -- this requires a reachable
-    Postgres, same as any other recorded run.
+    Postgres, same as any other recorded run. on_record, if given, is called
+    with each record's id right after it's written (e.g. so a caller can
+    link it to an orchestrated analysis) -- optional, so existing callers
+    that don't need this are unaffected.
     """
     full_set = frozenset(ALL_STAGES)
     cache: dict[frozenset[Stage], pd.Series] = {}
@@ -191,9 +193,11 @@ def _coalition_series_cache(
         else:
             label = f"_derived_{'_'.join(str(int(s)) for s in sorted(coalition))}"
             derived_config = build_derived_config(config_anchor, config_other, coalition, label)
-            shared = _shared_for(derived_config, shared_cec, shared_adr)
+            shared = shared_inputs_for(derived_config, shared_cec, shared_adr)
             derived_result = run_pipeline(derived_config, shared, defaults)
-            record_provenance(derived_config, shared, derived_result, ExecutionSet.DERIVED.value)
+            record_id = record_provenance(derived_config, shared, derived_result, ExecutionSet.DERIVED.value)
+            if on_record is not None:
+                on_record(record_id)
             cache[coalition] = stage_series(derived_result.outputs, Stage.AC, daylight)
     return cache
 
@@ -245,9 +249,12 @@ def run_phase3(
     shared_adr: SharedInputs,
     daylight: pd.Series,
     defaults: dict | None = None,
+    on_record: Callable[[str], None] | None = None,
 ) -> Phase3Result | Phase3NotComputable:
     """Phase 3 for one pair. Checks computability before running anything --
-    an invalid pair costs zero pipeline runs.
+    an invalid pair costs zero pipeline runs. on_record, if given, is called
+    with every derived run's record id (e.g. so a caller can link it to an
+    orchestrated analysis).
     """
     computable, invalid = pair_is_shapley_computable(config_a, config_b)
     if not computable:
@@ -256,10 +263,10 @@ def run_phase3(
     defaults = defaults or load_defaults()
 
     cache_ab = _coalition_series_cache(
-        config_a, result_a, config_b, result_b, shared_cec, shared_adr, defaults, daylight
+        config_a, result_a, config_b, result_b, shared_cec, shared_adr, defaults, daylight, on_record
     )
     cache_ba = _coalition_series_cache(
-        config_b, result_b, config_a, result_a, shared_cec, shared_adr, defaults, daylight
+        config_b, result_b, config_a, result_a, shared_cec, shared_adr, defaults, daylight, on_record
     )
 
     v_ab = _v_from_cache(cache_ab, _rmsd)

@@ -90,11 +90,18 @@ def transpose(
 
     # perez's own formula divides by DHI (eps = (dhi+dni)/dhi + ...), so GHI = 0
     # (hence DNI = DHI = 0) gives a 0/0 -> NaN there, when GHI = 0 implies no
-    # irradiance at all (23/09, found on the real Colombo file). Fix only actual
-    # NaN at GHI = 0; other models are unaffected and are left untouched.
+    # irradiance at all (23/09, found on the real Colombo file). Originally only
+    # poa_global/poa_sky_diffuse were patched; poa_diffuse can independently come
+    # back NaN from the same 0/0 (confirmed 28/09, real Colombo file: 24 night
+    # rows near true zenith just past 90 deg -- large-but-finite airmass -- gave
+    # a NaN poa_diffuse that fed straight into Stage 4's effective_irradiance,
+    # producing NaN p_dc for singlediode_cec/_desoto, even though poa_global
+    # itself looked clean). Every column get_total_irradiance() returns is
+    # covered here now, not just the two that happened to surface first. Fix
+    # only actual NaN at GHI = 0; other models are unaffected and untouched.
     ghi_zero = weather["ghi"].to_numpy(dtype=float) == 0.0
     nan_fixed = 0
-    for col in ("poa_sky_diffuse", "poa_global"):
+    for col in ("poa_global", "poa_direct", "poa_diffuse", "poa_sky_diffuse", "poa_ground_diffuse"):
         broken = ghi_zero & outputs[col].isna().to_numpy()
         if broken.any():
             outputs.loc[broken, col] = 0.0

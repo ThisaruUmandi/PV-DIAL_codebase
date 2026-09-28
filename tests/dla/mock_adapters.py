@@ -64,3 +64,41 @@ def install_mock_model(
         return replace(baseline, outputs=perturbed_outputs, records=records)
 
     monkeypatch.setattr(pipeline_module, attr, wrapped)
+
+
+def install_mock_temperature_model(
+    monkeypatch,
+    mock_name: str,
+    real_model: str,
+    delta: float,
+    mode: Mode = "multiplicative",
+) -> None:
+    """Like install_mock_model, but for Stage.TEMPERATURE only: perturbs the
+    RISE above ambient (temp_cell - temp_air), not the absolute Celsius
+    value. Every real cell-temperature model converges to ambient as
+    irradiance -> 0 (there's no "rise" left to perturb), so this preserves
+    that -- a plain multiplicative/additive perturbation of the absolute
+    value does not: it scales ambient itself at night (and near sunrise/
+    sunset in daylight), which can push a reading far below ambient and trip
+    the unrelated "cell temp far below air temp" plausibility check
+    (data/validate.py::validate_post_temperature) regardless of whether the
+    intended daytime disagreement is otherwise reasonable.
+    """
+    real_function = pipeline_module.cell_temperature
+
+    def wrapped(model, *args, **kwargs):
+        if model != mock_name:
+            return real_function(model, *args, **kwargs)
+        baseline = real_function(real_model, *args, **kwargs)
+        weather = args[1]
+        ambient = weather["temp_air"]
+        rise = baseline.outputs["temp_cell"] - ambient
+        perturbed = ambient + _perturb(rise, delta, mode)
+        outputs = baseline.outputs.assign(temp_cell=perturbed)
+        records = dict(baseline.records)
+        records.update(
+            {"model": mock_name, "mock": True, "base_model": real_model, "delta": delta, "mode": mode}
+        )
+        return replace(baseline, outputs=outputs, records=records)
+
+    monkeypatch.setattr(pipeline_module, "cell_temperature", wrapped)

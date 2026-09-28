@@ -16,6 +16,7 @@ import pandas as pd
 from pvdials.data.validate import (
     ValidationResult,
     validate_ac_not_exceeding_dc,
+    validate_all_finite,
     validate_post_dc,
     validate_post_decomposition,
     validate_post_temperature,
@@ -127,12 +128,23 @@ def run_pipeline(
         defaults=defaults,
     )
 
+    all_finite = ValidationResult()
+    for stage_name, stage_result in (
+        ("Decomposition", decomposition),
+        ("Transposition", transposition),
+        ("Temperature", temperature),
+        ("DC", dc),
+        ("AC", ac),
+    ):
+        all_finite.merge(validate_all_finite(stage_result.outputs, stage_name, shared.ctx.daylight))
+
     validations = {
         "decomposition": validate_post_decomposition(decomposition.outputs),
         "transposition": validate_post_transposition(transposition.outputs),
         "temperature": validate_post_temperature(temperature.outputs, shared.weather),
         "dc": validate_post_dc(dc.outputs),
         "ac_not_exceeding_dc": validate_ac_not_exceeding_dc(ac.outputs, dc.outputs),
+        "all_finite": all_finite,
     }
 
     outputs = StageOutputs(

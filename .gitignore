@@ -8,4 +8,4 @@ __pycache__/
 data/raw/*
 !data/raw/.gitkeep
 outputs/
-.env
+.envdata/weather/

@@ -11,7 +11,10 @@ from pvdials.dla.phase1 import (
 from pvdials.types import Stage
 from tests.dla.builders import all_daylight, make_pipeline_result
 
-INDEX = pd.date_range("2023-06-21 08:00", periods=6, freq="h", tz="UTC")
+# 12 rows, not 6: n_pooled (2x daylight rows) must clear N_MIN=21 (28/09's
+# sample-size guard, dla/metrics.py) for stages 2-5 to give a real nRMSD
+# rather than "not computable" -- 6 rows gives n_pooled=12, too few.
+INDEX = pd.date_range("2023-06-21 08:00", periods=12, freq="h", tz="UTC")
 DAYLIGHT = all_daylight(INDEX)
 
 
@@ -19,7 +22,7 @@ DAYLIGHT = all_daylight(INDEX)
 # actual spread across the daylight hours. A constant series collapses the
 # denominator to the (tiny) gap between two near-identical constants, making
 # nRMSD ~= 1.0 regardless of how small the intended delta is.
-_RAMP = [0.7, 0.85, 1.0, 1.0, 0.85, 0.7]
+_RAMP = [0.7, 0.85, 1.0, 1.0, 0.85, 0.7] * 2
 
 
 def _baseline(label, **overrides):
@@ -99,7 +102,7 @@ def test_upstream_disagreement_with_final_agreement_gives_outcome_3():
     result_a = _baseline("A")
     # A large difference at Stage 1, but AC ends up matching again.
     result_b = _baseline(
-        "B", dni=[800.0] * 6, dhi=[300.0] * 6, decomposition_model="disc"
+        "B", dni=[800.0] * 12, dhi=[300.0] * 12, decomposition_model="disc"
     )
 
     phase1 = run_phase1(result_a.config, result_a, result_b.config, result_b, DAYLIGHT)
@@ -121,7 +124,7 @@ def test_differing_stages_matches_the_actual_config_fields():
 
 
 def test_relabelling_pipelines_does_not_change_the_outcome():
-    result_a = _baseline("A", p_dc=[3000.0] * 6, dc_model="singlediode_desoto")
+    result_a = _baseline("A", p_dc=[3000.0] * 12, dc_model="singlediode_desoto")
     result_b = _baseline("B")
 
     ab = run_phase1(result_a.config, result_a, result_b.config, result_b, DAYLIGHT)

@@ -22,6 +22,7 @@ passed in already-loaded, the same way stage5_pool_view() itself takes them.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import pandas as pd
@@ -37,6 +38,7 @@ from pvdials.physics.registry import (
     stage4_pool_view,
     stage5_pool_view,
 )
+from pvdials.physics.shared_inputs import shared_inputs_for
 from pvdials.provenance.recorder import record as record_provenance
 from pvdials.types import ExecutionSet, PipelineConfig, Stage
 
@@ -90,11 +92,6 @@ def substitute_stage(
     )
 
 
-def _shared_for(config: PipelineConfig, shared_cec: SharedInputs, shared_adr: SharedInputs) -> SharedInputs:
-    """Same inverter-library routing Phase 3 uses: 'adr' needs the
-    ADRInverter-tagged SharedInputs, everything else uses the CEC one.
-    """
-    return shared_adr if config.ac_model == "adr" else shared_cec
 
 
 def alternatives_at_stage(
@@ -193,6 +190,7 @@ class O4Session:
     adr_inverters: pd.DataFrame
     daylight: pd.Series
     defaults: dict | None = None
+    on_record: Callable[[str], None] | None = None
 
     def alternatives(self) -> tuple[CandidateModel, ...]:
         return alternatives_at_stage(
@@ -216,9 +214,11 @@ class O4Session:
         self._validate(candidate_model)
         label = f"{self.pair[0]}_{self.pair[1]}_{label_suffix}"
         config = substitute_stage(self.anchor_config, self.stage, candidate_model, label)
-        shared = _shared_for(config, self.shared_cec, self.shared_adr)
+        shared = shared_inputs_for(config, self.shared_cec, self.shared_adr)
         result = run_pipeline(config, shared, defaults)
-        record_provenance(config, shared, result, ExecutionSet.REEXEC.value)
+        record_id = record_provenance(config, shared, result, ExecutionSet.REEXEC.value)
+        if self.on_record is not None:
+            self.on_record(record_id)
         return config, result
 
     def propose(self, candidate_model: str) -> ProposalResult:

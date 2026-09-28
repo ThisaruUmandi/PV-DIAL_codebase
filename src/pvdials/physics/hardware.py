@@ -198,3 +198,11 @@ def load_inverter(library: str, name: str) -> InverterRecord:
     """Load an inverter by library + name from pvlib's own database. See load_module()."""
     params = pvsystem.retrieve_sam(library)[name]
     return InverterRecord(library, name, params)
+
+
+def load_inverter_database(library: str) -> pd.DataFrame:
+    """The whole raw inverter database for one library (KT §4: pvlib stays
+    in physics/) -- for callers that need the full table (e.g.
+    stage5_pool_view()'s inverter_libraries() check), not one named record.
+    """
+    return pvsystem.retrieve_sam(library)

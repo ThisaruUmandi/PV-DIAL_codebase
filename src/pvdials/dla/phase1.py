@@ -77,12 +77,17 @@ def run_phase1(
     daylight: pd.Series,
     tau_value: float | None = None,
     defaults: dict | None = None,
-) -> PairPhase1Result:
+) -> PairPhase1Result | str:
     """Run Phase 1 (and, equivalently, the disagreement check) for one pair.
 
     daylight: the shared daylight mask from the comparison's SiteContext
     (identical for both pipelines, since it's derived from solar position
     only, never from pipeline output).
+
+    Returns a string ("not computable — <reason> at stage <s>") instead of a
+    PairPhase1Result if any stage's nRMSD isn't a real number (28/09: too few
+    daylight samples, or a zero pooled spread) -- there's no k, no outcome,
+    nothing for Phase 2/3/O4 to use for that pair.
     """
     defaults = defaults or load_defaults()
     tau = resolve_tau(tau_value, defaults)
@@ -93,6 +98,10 @@ def run_phase1(
         series_b = stage_series(result_b.outputs, stage, daylight)
         p5, p95 = pooled_p5_p95(series_a, series_b)
         metrics[stage] = pair_metrics(series_a, series_b, p5, p95)
+
+    for stage in _STAGES_IN_ORDER:
+        if metrics[stage].not_computable_reason is not None:
+            return f"not computable — {metrics[stage].not_computable_reason} at stage {stage.name}"
 
     over_tau = [stage for stage in _STAGES_IN_ORDER if metrics[stage].nrmsd > tau.value]
 

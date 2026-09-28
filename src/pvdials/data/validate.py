@@ -286,3 +286,31 @@ def validate_ac_not_exceeding_dc(
             f"(first at {first:%d %b %H:%M})."
         )
     return result
+
+
+def validate_all_finite(outputs: pd.DataFrame, stage_name: str, daylight: pd.Series) -> ValidationResult:
+    """Every column of one stage's output must be finite on every row.
+
+    Not one of the KT's six named tiers. The existing per-stage checks
+    (validate_post_decomposition etc.) only look at each stage's headline
+    column (dni/dhi, poa_global, temp_cell, p_dc) -- a NaN in a column they
+    don't check (e.g. poa_diffuse) passed through unnoticed until it reached
+    a later stage and broke something there (28/09, real Colombo file: a
+    NaN poa_diffuse reached Stage 4's effective_irradiance and produced NaN
+    p_dc for singlediode_cec, while poa_global itself looked clean the whole
+    time). This is the general catch-all those checks don't provide: every
+    column, not just the one each stage happens to headline.
+    """
+    result = ValidationResult()
+    for col in outputs.columns:
+        values = outputs[col].to_numpy(dtype=float)
+        bad = ~np.isfinite(values)
+        n_bad = int(bad.sum())
+        if n_bad:
+            n_day = int((bad & daylight.to_numpy()).sum())
+            n_night = n_bad - n_day
+            result.add_problem(
+                f"{stage_name} column '{col}' has {n_bad} non-finite value(s) "
+                f"({n_day} daylight, {n_night} night)."
+            )
+    return result

@@ -146,6 +146,9 @@ def test_perez_zero_ghi_divide_by_zero_is_fixed_and_recorded():
 
     assert (result.outputs["poa_global"] == 0).all()
     assert (result.outputs["poa_sky_diffuse"] == 0).all()
+    assert (result.outputs["poa_diffuse"] == 0).all()
+    assert (result.outputs["poa_direct"] == 0).all()
+    assert (result.outputs["poa_ground_diffuse"] == 0).all()
     assert result.records["nan_at_zero_ghi_set_zero"] > 0
 
 
@@ -246,3 +249,58 @@ def test_mismatched_weather_and_context_index_is_rejected():
 
     with pytest.raises(AdapterError, match="site context"):
         transpose("isotropic", weather, decomposition, other_ctx, GEOMETRY, DEFAULT_ALBEDO)
+
+
+# --- Real-file regression: the 24-row Stage 2 NaN fix (28/09) ----------------------
+
+REAL_COLOMBO_FILE = Path("data/weather/tmy_6.939_79.854_2005_2023.csv")
+requires_real_colombo_file = pytest.mark.skipif(
+    not REAL_COLOMBO_FILE.exists(), reason=f"Real Colombo file not present at {REAL_COLOMBO_FILE}"
+)
+
+
+@pytest.mark.slow
+@requires_real_colombo_file
+def test_real_file_perez_fix_clears_downstream_dc_nans():
+    """The originally-diagnosed case: pipeline C (dirint/perez/ross/
+    singlediode_cec/sandia) had 24 NaN p_dc rows on the real Colombo file --
+    poa_diffuse (not poa_global) was NaN at those rows, feeding straight into
+    Stage 4's effective_irradiance. With the Stage 2 fix covering every
+    output column, p_dc must have zero NaNs and the pipeline's annual AC
+    energy must be finite.
+    """
+    from pvlib import pvsystem
+
+    from pvdials.data.column_mapper import TAG_USER_ENTERED
+    from pvdials.guided_reexecution import annual_yield_kwh
+    from pvdials.physics.hardware import CEC, CEC_INVERTER, ArraySize, InverterRecord, ModuleRecord
+    from pvdials.physics.mounting import resolve_mounting
+    from pvdials.physics.pipeline import SharedInputs, run_pipeline
+    from pvdials.types import PipelineConfig
+
+    defaults = load_defaults()
+    uploaded = load_uploaded_csv(REAL_COLOMBO_FILE)
+    weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
+    site = detect_site_metadata(uploaded.preamble, uploaded.table)
+    offset = TimeOffset(
+        0.0, TAG_USER_ENTERED,
+        override_reason="header states 0.5 h; file day/night content aligns with 0 h",
+    )
+    ctx = build_site_context(weather, site, offset, defaults)
+
+    cec_modules = pvsystem.retrieve_sam(CEC)
+    module = ModuleRecord(CEC, "Canadian_Solar_Inc__CS6K_300MS", cec_modules["Canadian_Solar_Inc__CS6K_300MS"])
+    cec_inverters = pvsystem.retrieve_sam(CEC_INVERTER)
+    inv_name = "ABB__PVI_6000_OUTD_S_US_A__208V_"
+    shared = SharedInputs(
+        weather=weather, ctx=ctx, geometry=GEOMETRY,
+        albedo=resolve_albedo(None, defaults), mounting=resolve_mounting(None, None, defaults),
+        module=module, array_size=ArraySize(10, 2), module_height_m=3.0,
+        inverter=InverterRecord(CEC_INVERTER, inv_name, cec_inverters[inv_name]),
+    )
+    config_c = PipelineConfig("C", "dirint", "perez", "ross", "singlediode_cec", "sandia")
+    result_c = run_pipeline(config_c, shared, defaults)
+
+    assert result_c.outputs.dc.outputs["p_dc"].isna().sum() == 0
+    assert np.isfinite(annual_yield_kwh(result_c))
+    assert result_c.validations["all_finite"].passed

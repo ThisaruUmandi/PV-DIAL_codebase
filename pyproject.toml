@@ -28,7 +28,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q -m \"not slow\""
+markers = [
+    "slow: real multi-minute runs against full-size real data (real Colombo file, etc.) -- excluded by default; run with `pytest -m slow` (or `-m \"\"` for everything).",
+]
 
 [tool.ruff]
 line-length = 100

@@ -1,0 +1,21 @@
+name: colombo_first_run
+weather_file: data/weather/tmy_6.939_79.854_2005_2023.csv
+time_offset:
+  value_h: 0.0
+  reason: "header states 0.5 h; file day/night content aligns with 0 h"
+site:
+  tilt_deg: 6.944
+  azimuth_deg: 180.0
+  albedo: null
+  mounting_geometry: null
+  mounting_construction: null
+  module_height_m: 3.0
+hardware:
+  module_name: Canadian_Solar_Inc__CS6K_300MS
+  inverter_name: ABB__PVI_6000_OUTD_S_US_A__208V_
+  modules_per_string: 10
+  strings_per_inverter: 2
+pipelines:
+  A: {decomposition: erbs,   transposition: isotropic, temperature: faiman,      dc: singlediode_cec,    ac: sandia}
+  B: {decomposition: disc,   transposition: haydavies, temperature: pvsyst_cell, dc: singlediode_desoto, ac: sandia}
+  C: {decomposition: dirint, transposition: perez,     temperature: ross,        dc: singlediode_cec,    ac: sandia}

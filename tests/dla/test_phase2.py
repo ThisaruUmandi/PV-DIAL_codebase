@@ -6,9 +6,11 @@ from pvdials.dla.phase2 import run_phase2
 from pvdials.types import Stage
 from tests.dla.builders import all_daylight, make_pipeline_result
 
-INDEX = pd.date_range("2023-06-21 08:00", periods=6, freq="h", tz="UTC")
+# 12 rows, not 6: n_pooled (2x daylight rows) must clear N_MIN=21 (28/09's
+# sample-size guard, dla/metrics.py) for a real nRMSD, not "not computable".
+INDEX = pd.date_range("2023-06-21 08:00", periods=12, freq="h", tz="UTC")
 DAYLIGHT = all_daylight(INDEX)
-_RAMP = [0.7, 0.85, 1.0, 1.0, 0.85, 0.7]
+_RAMP = [0.7, 0.85, 1.0, 1.0, 0.85, 0.7] * 2
 
 
 def _pipeline(label, dc_scale=1.0, ac_scale=1.0, dc_model="singlediode_cec", ac_model="sandia"):

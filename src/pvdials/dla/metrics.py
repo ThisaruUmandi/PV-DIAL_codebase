@@ -22,6 +22,21 @@ from pvdials.types import Stage
 TAG_DEFAULT = "default"
 TAG_USER_ENTERED = "user_entered"
 
+# Percentile positions nRMSD's denominator is built from (KT §8.1). Named so
+# N_MIN below is derived from them, not a separately chosen number.
+P5_QUANTILE = 0.05
+P95_QUANTILE = 0.95
+
+# Smallest pooled sample size at which P5 no longer reduces to pandas' linear
+# interpolation between just the two smallest pooled values (28/09, found via
+# a real degenerate case: at n=2, P5 = min + 0.05*(max-min) and P95 = min +
+# 0.95*(max-min), giving P95-P5 = 0.9*|a-b| identically regardless of a/b's
+# actual magnitude -- nRMSD collapses to a fixed 1/0.9 constant, meaningless).
+# P5's interpolation position is P5_QUANTILE*(n-1); it draws on a third value
+# (index >= 1) once that position is >= 1, i.e. n >= ceil(1/P5_QUANTILE) + 1.
+# By symmetry the same n also clears P95's equivalent condition at the top.
+N_MIN = math.ceil(1 / P5_QUANTILE) + 1
+
 
 @dataclass(frozen=True)
 class Tau:
@@ -48,13 +63,23 @@ class PairMetrics:
 
     systematic_share is None when rmsd == 0 (the pipelines are identical at
     this stage: mbd is then 0 too, so the ratio is 0/0, not a defensible 0).
+
+    n_pooled: how many values (both pipelines together) nRMSD's denominator
+    would be drawn from -- 2x the daylight-row count for stages 2-5, 4x at
+    Stage 1 (DNI concatenated with DHI, per pipeline, before pooling).
+    not_computable_reason: None when nrmsd is a real, meaningful number;
+    otherwise the reason it isn't (n_pooled < N_MIN, or a zero pooled
+    spread) -- nrmsd is None whenever this is set, replacing what used to
+    be a returned math.inf (28/09: that number was never meaningful either).
     """
 
     rmsd: float
-    nrmsd: float
+    nrmsd: float | None
     mad: float
     mbd: float
     systematic_share: float | None
+    n_pooled: int
+    not_computable_reason: str | None
 
 
 def stage_series(stage_outputs: StageOutputs, stage: Stage, daylight: pd.Series) -> pd.Series:
@@ -90,7 +115,7 @@ def pooled_p5_p95(series_a: pd.Series, series_b: pd.Series) -> tuple[float, floa
     the 25/09 decision extending the pooling convention to the two components.
     """
     pooled = pd.concat([series_a, series_b], ignore_index=True)
-    return float(pooled.quantile(0.05)), float(pooled.quantile(0.95))
+    return float(pooled.quantile(P5_QUANTILE)), float(pooled.quantile(P95_QUANTILE))
 
 
 def pair_metrics(series_a: pd.Series, series_b: pd.Series, p5: float, p95: float) -> PairMetrics:
@@ -98,21 +123,36 @@ def pair_metrics(series_a: pd.Series, series_b: pd.Series, p5: float, p95: float
 
     MBD(A,B) = -MBD(B,A): diff is signed a-minus-b: the caller's ordering
     decides which pipeline is "a".
+
+    nrmsd is None (not_computable_reason set) whenever it wouldn't be a real
+    number: too few pooled samples for P5/P95 to mean anything (n_pooled <
+    N_MIN), or a zero pooled spread (P95 == P5) -- this replaces what used to
+    be a returned math.inf in the zero-spread case (28/09: that number was
+    never meaningful either, just differently wrong). rmsd == 0 is checked
+    first and always gives nrmsd = 0.0 regardless of sample size: two
+    identical series have zero disagreement unconditionally (D(A,A) = 0).
     """
     diff = series_a.to_numpy() - series_b.to_numpy()
     rmsd = math.sqrt((diff**2).mean())
     denominator = p95 - p5
-    # rmsd == 0 first: two identical series have zero disagreement regardless
-    # of the pool's spread (D(A,A) = 0 unconditionally). inf only applies when
-    # there IS a disagreement but the pooled reference range is degenerate
-    # (zero spread) -- rare on real, continuous physical data.
+    n_pooled = len(series_a) + len(series_b)
+
+    not_computable_reason: str | None = None
     if rmsd == 0:
         nrmsd = 0.0
+    elif n_pooled < N_MIN:
+        nrmsd = None
+        not_computable_reason = f"too few daylight samples (n pooled < {N_MIN})"
     elif denominator == 0:
-        nrmsd = math.inf
+        nrmsd = None
+        not_computable_reason = "zero spread (P95 - P5 = 0)"
     else:
         nrmsd = rmsd / denominator
+
     mad = float(abs(diff).mean())
     mbd = float(diff.mean())
     systematic_share = (mbd**2) / (rmsd**2) if rmsd != 0 else None
-    return PairMetrics(rmsd=rmsd, nrmsd=nrmsd, mad=mad, mbd=mbd, systematic_share=systematic_share)
+    return PairMetrics(
+        rmsd=rmsd, nrmsd=nrmsd, mad=mad, mbd=mbd, systematic_share=systematic_share,
+        n_pooled=n_pooled, not_computable_reason=not_computable_reason,
+    )

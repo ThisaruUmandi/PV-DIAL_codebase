@@ -17,31 +17,36 @@ from tests.dla.builders import all_daylight, make_pipeline_result
 
 
 def test_pair_metrics_matches_a_hand_computed_example():
-    a = pd.Series([10.0, 20.0, 30.0, 40.0])
-    b = pd.Series([12.0, 18.0, 33.0, 36.0])
-    # diff = [-2, 2, -3, 4]
+    # 11 elements: n_pooled = 22 >= N_MIN (21), so nrmsd is a real number, not
+    # "not computable" (28/09's sample-size guard) -- fewer would go vacuous.
+    a = pd.Series([10.0, 20.0, 30.0, 40.0, 10.0, 20.0, 30.0, 40.0, 10.0, 20.0, 30.0])
+    b = pd.Series([12.0, 18.0, 33.0, 36.0, 12.0, 18.0, 33.0, 36.0, 12.0, 18.0, 33.0])
+    # diff = [-2, 2, -3, 4, -2, 2, -3, 4, -2, 2, -3]
+    diffs = [-2, 2, -3, 4, -2, 2, -3, 4, -2, 2, -3]
     p5, p95 = pooled_p5_p95(a, b)
 
     metrics = pair_metrics(a, b, p5, p95)
 
-    expected_rmsd = math.sqrt((4 + 4 + 9 + 16) / 4)
-    expected_mad = (2 + 2 + 3 + 4) / 4
-    expected_mbd = (-2 + 2 - 3 + 4) / 4
+    expected_rmsd = math.sqrt(sum(d**2 for d in diffs) / len(diffs))
+    expected_mad = sum(abs(d) for d in diffs) / len(diffs)
+    expected_mbd = sum(diffs) / len(diffs)
     assert metrics.rmsd == pytest.approx(expected_rmsd)
     assert metrics.mad == pytest.approx(expected_mad)
     assert metrics.mbd == pytest.approx(expected_mbd)
+    assert metrics.not_computable_reason is None
     assert metrics.nrmsd == pytest.approx(expected_rmsd / (p95 - p5))
     assert metrics.systematic_share == pytest.approx(expected_mbd**2 / expected_rmsd**2)
 
 
 def test_nrmsd_is_symmetric():
-    a = pd.Series([10.0, 20.0, 30.0])
-    b = pd.Series([12.0, 18.0, 33.0])
+    a = pd.Series([10.0, 20.0, 30.0] * 4)
+    b = pd.Series([12.0, 18.0, 33.0] * 4)
     p5, p95 = pooled_p5_p95(a, b)
 
     ab = pair_metrics(a, b, p5, p95)
     ba = pair_metrics(b, a, p5, p95)
 
+    assert ab.not_computable_reason is None
     assert ab.nrmsd == pytest.approx(ba.nrmsd)
     assert ab.mbd == pytest.approx(-ba.mbd)
 
@@ -60,8 +65,8 @@ def test_identical_series_give_zero_and_undefined_share():
 
 
 def test_stage3_celsius_and_kelvin_give_identical_nrmsd():
-    celsius_a = pd.Series([20.0, 25.0, 30.0])
-    celsius_b = pd.Series([22.0, 24.0, 33.0])
+    celsius_a = pd.Series([20.0, 25.0, 30.0] * 4)
+    celsius_b = pd.Series([22.0, 24.0, 33.0] * 4)
     kelvin_a = celsius_a + 273.15
     kelvin_b = celsius_b + 273.15
 
@@ -71,6 +76,7 @@ def test_stage3_celsius_and_kelvin_give_identical_nrmsd():
     metrics_c = pair_metrics(celsius_a, celsius_b, p5_c, p95_c)
     metrics_k = pair_metrics(kelvin_a, kelvin_b, p5_k, p95_k)
 
+    assert metrics_c.not_computable_reason is None
     assert metrics_c.nrmsd == pytest.approx(metrics_k.nrmsd)
 
 
@@ -129,3 +135,92 @@ def test_resolve_tau_default_and_user_entered():
     assert default_tau.source == TAG_DEFAULT
     assert user_tau.value == 0.1
     assert user_tau.source == TAG_USER_ENTERED
+
+
+# --- N_MIN sample-size guard (28/09) ------------------------------------------------
+
+
+def test_n_min_is_21_derived_from_the_quantile_constants():
+    from pvdials.dla.metrics import N_MIN, P5_QUANTILE
+
+    # n_min: smallest n such that P5_QUANTILE*(n-1) >= 1 (P5 draws on a third
+    # value, not just the two smallest pooled ones).
+    assert P5_QUANTILE * (N_MIN - 1) >= 1
+    assert P5_QUANTILE * (N_MIN - 2) < 1
+    assert N_MIN == 21
+
+
+def test_boundary_n_pooled_20_is_not_computable():
+    a = pd.Series(list(range(10)), dtype=float)
+    b = pd.Series([v + 1.0 for v in range(10)])
+    p5, p95 = pooled_p5_p95(a, b)
+
+    metrics = pair_metrics(a, b, p5, p95)
+
+    assert metrics.n_pooled == 20
+    assert metrics.nrmsd is None
+    assert metrics.not_computable_reason == "too few daylight samples (n pooled < 21)"
+
+
+def test_boundary_n_pooled_22_is_computable():
+    # n_pooled is always even in practice (both series are daylight-masked to
+    # the same length), so 21 itself can never occur -- 20 (not computable)
+    # vs 22 (computable) is the real boundary this guard draws.
+    a = pd.Series(list(range(11)), dtype=float)
+    b = pd.Series([v + 1.0 for v in range(11)])
+    p5, p95 = pooled_p5_p95(a, b)
+
+    metrics = pair_metrics(a, b, p5, p95)
+
+    assert metrics.n_pooled == 22
+    assert metrics.not_computable_reason is None
+    assert metrics.nrmsd is not None
+
+
+def test_zero_pooled_spread_is_not_computable():
+    # 41 pooled values are 5.0, one is 6.0 -> P5 and P95 both land on 5.0
+    # (interpolated between repeated 5.0s), so P95-P5=0 even though rmsd!=0.
+    a = pd.Series([5.0] * 21)
+    b = pd.Series([5.0] * 20 + [6.0])
+    p5, p95 = pooled_p5_p95(a, b)
+    assert p95 - p5 == 0.0
+
+    metrics = pair_metrics(a, b, p5, p95)
+
+    assert metrics.rmsd > 0
+    assert metrics.n_pooled == 42
+    assert metrics.nrmsd is None
+    assert metrics.not_computable_reason == "zero spread (P95 - P5 = 0)"
+
+
+def test_rmsd_zero_is_always_computable_regardless_of_sample_size():
+    # rmsd==0 is checked before the sample-size guard: two identical series
+    # have zero disagreement unconditionally, even with very few points.
+    a = pd.Series([10.0, 20.0, 30.0])
+
+    p5, p95 = pooled_p5_p95(a, a)
+    metrics = pair_metrics(a, a, p5, p95)
+
+    assert metrics.n_pooled == 6
+    assert metrics.rmsd == 0.0
+    assert metrics.nrmsd == 0.0
+    assert metrics.not_computable_reason is None
+    assert metrics.systematic_share is None  # 0/0, not a defensible zero
+
+
+def test_one_daylight_row_fixture_is_not_computable_not_10_over_9():
+    """The originally-diagnosed degenerate case (25/09): with exactly 1
+    daylight row per pipeline, P95-P5 collapsed to 0.9*|a-b|, giving nRMSD a
+    fixed 10/9 regardless of the actual disagreement. The sample-size guard
+    now catches this directly: n_pooled=2 < N_MIN, so nrmsd is None with a
+    clear reason, not a silently-meaningless 1.1111.
+    """
+    a = pd.Series([100.0])
+    b = pd.Series([150.0])
+    p5, p95 = pooled_p5_p95(a, b)
+
+    metrics = pair_metrics(a, b, p5, p95)
+
+    assert metrics.n_pooled == 2
+    assert metrics.nrmsd is None
+    assert metrics.not_computable_reason == "too few daylight samples (n pooled < 21)"
