@@ -27,14 +27,19 @@ extraterrestrial:
   solar_constant_w_m2: 1366.1
 
 dla:
-  tau: 0.234             # N34 (experiments/tau_calibration/), per N33's pre-registered selection
-                          # rule: smallest candidate width >= 0.02 clearing stable_fraction >= 0.99.
-                          # This plateau (centre 0.234) replicated identically across independent
-                          # ensemble sizes (n=100/300/1000/2058) and independent seeds (n=1000 at
-                          # seed=0 and seed=1) — six confirming runs, none contradicting. A finer-
-                          # grained candidate (tau ~ 0.09-0.10) also exists but isn't used here;
-                          # n=100 could not resolve it reliably (0.011-0.229 across draws), which is
-                          # why it's reported separately rather than configured.
+  tau: 0.093              # 28/09, experiments/tau_calibration/trivial_plateau_amendment_exhaustive.py.
+                          # Amended plateau-selection rule (on top of N33/N34's own): excludes two
+                          # near-trivial regions -- tau where >=99% of pairs are outcome 1 (k=None),
+                          # and tau where >=99% of pairs have k=min(S) (S = the stages where the two
+                          # chains' models differ; near tau=0 this just reports structural divergence,
+                          # not a real diagnosis). N34's old default (0.234) sits inside the near-
+                          # trivial-HIGH region: exhaustively, over all C(2,058,2) = 2,116,653 valid
+                          # pairs, 100.00% are outcome 1 at tau=0.234 (the single largest per-pair
+                          # max-stage nRMSD across the whole population is 0.2255, below 0.234).
+                          # This value is the amended rule's default: smallest candidate width
+                          # (0.01) clearing stable_fraction >= 0.99, plateau [0.088, 0.098], centre
+                          # 0.093, stable_fraction 0.996 -- computed exhaustively, no sampling.
+                          # Matches n=1000 sample runs closely (seed=0: 0.101, seed=1: 0.093).
   daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
   daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)
 

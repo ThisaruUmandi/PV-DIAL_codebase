@@ -214,13 +214,15 @@ def test_constructed_outcome_3_pair_covers_phase2_phase3_reexec_and_roundtrip(tm
 def test_only_one_qualifying_pair_runs_phase2_and_gates_phase3_per_pair(tmp_path, monkeypatch):
     """New Phase 2 gate: it runs whenever AT LEAST ONE pair reached outcome
     2/3, not only when all three do -- confirmed empirically (probed
-    directly on the real file): A=real faiman, B=mock+30% (A-B crosses tau,
-    temp_nrmsd=0.32), C=mock+15% (A-C=0.20, B-C=0.18, both stay under
-    tau=0.234). Phase 2 must run (computed over all three pairs regardless);
-    Phase 3 must run for A-B only, reporting NOT_RUN_OUTCOME_1 for A-C/B-C.
+    directly on the real file, deltas re-tuned 28/09 for tau=0.093, the
+    amended-plateau-rule default that superseded N34's 0.234): A=real
+    faiman, B=mock+8% (A-B crosses tau, temp_nrmsd=0.1139), C=mock+2%
+    (A-C=0.0299, B-C=0.0859, both stay under tau=0.093). Phase 2 must run
+    (computed over all three pairs regardless); Phase 3 must run for A-B
+    only, reporting NOT_RUN_OUTCOME_1 for A-C/B-C.
     """
-    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_b", "faiman", delta=0.30)
-    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_c", "faiman", delta=0.15)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_b", "faiman", delta=0.08)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_c", "faiman", delta=0.02)
 
     overrides = {
         "weather_file": str(REAL_FILE),
