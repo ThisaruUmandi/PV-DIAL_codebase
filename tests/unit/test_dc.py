@@ -48,8 +48,11 @@ SANDIA_MODULES = pvsystem.retrieve_sam(SANDIA)
 SANDIA_NAME = SANDIA_MODULES.columns[0]
 SANDIA_MODULE = ModuleRecord(SANDIA, SANDIA_NAME, SANDIA_MODULES[SANDIA_NAME])
 
-# scipy's chandrupatla solver (used inside singlediode) warns on a harmless
-# divide-by-zero at zero-irradiance rows; not relevant to what these tests check.
+# pvlib's lambertw MPP search (pvsystem.singlediode(method="lambertw"), the
+# method configured here) degenerates to a single-point bracket at IL=0 and
+# warns on a harmless divide-by-zero inside scipy's _chandrupatla_minimize
+# (used internally for that MPP search, not the bishop88/chandrupatla IV-curve
+# method); not relevant to what these tests check.
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
 
@@ -208,6 +211,23 @@ def test_sapm_zero_irradiance_nan_is_fixed_and_recorded():
     assert result.records["nan_at_zero_irradiance_set_zero"] > 0
 
 
+@pytest.mark.parametrize("model", ["singlediode_desoto", "singlediode_cec"])
+def test_singlediode_zero_irradiance_residual_is_forced_to_exact_zero_and_recorded(model):
+    # At IL=0, pvlib's lambertw MPP search degenerates to a single-point
+    # bracket and returns a tiny nonzero v_mp/p_mp/i_mp residual instead of
+    # exact 0 -- not NaN, but wrong (no irradiance, no photocurrent, exactly
+    # zero output). inverter.adr() only recognises night at bit-exact
+    # v_dc=0.0 (28/09), so an unpatched residual reads as NaN downstream.
+    weather, ctx = _day()
+    result = _dc(model, weather, ctx)
+
+    zero_irradiance = weather["ghi"].to_numpy(dtype=float) == 0.0
+    assert zero_irradiance.any(), "fixture must contain real zero-GHI (night) rows"
+    for col in ("p_dc", "v_dc", "i_dc"):
+        assert (result.outputs.loc[zero_irradiance, col] == 0.0).all()
+    assert result.records["effective_irradiance_zero_forced_exact_zero"] == int(zero_irradiance.sum())
+
+
 def test_pdc0_and_gamma_pdc_reach_the_adapter():
     weather, ctx = _day()
     changed = copy.deepcopy(load_defaults())
@@ -238,6 +258,66 @@ def test_iam_physical_setting_reaches_the_adapter():
     other = _dc("singlediode_cec", weather, ctx, defaults=changed)
 
     assert not base.outputs["p_dc"].equals(other.outputs["p_dc"])
+
+
+REAL_COLOMBO_FILE = Path("data/weather/tmy_6.939_79.854_2005_2023.csv")
+requires_real_colombo_file = pytest.mark.skipif(
+    not REAL_COLOMBO_FILE.exists(), reason=f"Real Colombo file not present at {REAL_COLOMBO_FILE}"
+)
+
+
+@pytest.mark.slow
+@requires_real_colombo_file
+def test_real_file_adr_night_nan_is_cured_and_matches_sandia():
+    """The 28/09-diagnosed pool-scan finding: 588/2,058 chains failed, 100%
+    ac_model='adr', 100% at night, 0% daylight -- root-caused to the
+    singlediode lambertw solver's tiny nonzero v_dc residual at zero
+    irradiance, which fails adr()'s bit-exact v_dc==0 night check (sandia's
+    p_dc<Pso threshold tolerates the same residual fine). With this stage's
+    forced-exact-zero patch, adr must have zero NaN p_ac and agree with
+    sandia's own night-tare value on the same real zero-GHI rows.
+    """
+    from pvlib import pvsystem as _pvsystem
+
+    from pvdials.data.column_mapper import TAG_USER_ENTERED
+    from pvdials.physics.hardware import ADR_INVERTER, CEC_INVERTER, ArraySize, InverterRecord
+    from pvdials.physics.pipeline import SharedInputs, run_pipeline
+    from pvdials.types import PipelineConfig
+
+    defaults = load_defaults()
+    uploaded = load_uploaded_csv(REAL_COLOMBO_FILE)
+    weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
+    site = detect_site_metadata(uploaded.preamble, uploaded.table)
+    offset = TimeOffset(
+        0.0, TAG_USER_ENTERED,
+        override_reason="header states 0.5 h; file day/night content aligns with 0 h",
+    )
+    ctx = build_site_context(weather, site, offset, defaults)
+
+    cec_inverters = _pvsystem.retrieve_sam(CEC_INVERTER)
+    adr_inverters = _pvsystem.retrieve_sam(ADR_INVERTER)
+    inv_name = "ABB__PVI_6000_OUTD_S_US_A__208V_"
+    base = {
+        "weather": weather, "ctx": ctx, "geometry": GEOMETRY, "albedo": DEFAULT_ALBEDO,
+        "mounting": DEFAULT_MOUNTING, "module": CEC_MODULE, "array_size": ArraySize(10, 2),
+        "module_height_m": 3.0,
+    }
+    shared_cec = SharedInputs(**base, inverter=InverterRecord(CEC_INVERTER, inv_name, cec_inverters[inv_name]))
+    shared_adr = SharedInputs(**base, inverter=InverterRecord(ADR_INVERTER, inv_name, adr_inverters[inv_name]))
+
+    config_sandia = PipelineConfig("S", "dirint", "perez", "ross", "singlediode_cec", "sandia")
+    config_adr = PipelineConfig("R", "dirint", "perez", "ross", "singlediode_cec", "adr")
+    result_sandia = run_pipeline(config_sandia, shared_cec, defaults)
+    result_adr = run_pipeline(config_adr, shared_adr, defaults)
+
+    assert result_adr.outputs.ac.outputs["p_ac"].isna().sum() == 0
+    assert result_adr.validations["all_finite"].passed
+
+    zero_ghi = weather["ghi"].to_numpy(dtype=float) == 0.0
+    assert zero_ghi.any()
+    p_ac_adr_night = result_adr.outputs.ac.outputs["p_ac"][zero_ghi]
+    p_ac_sandia_night = result_sandia.outputs.ac.outputs["p_ac"][zero_ghi]
+    pd.testing.assert_series_equal(p_ac_adr_night, p_ac_sandia_night, check_names=False)
 
 
 def test_effective_irradiance_path_recorded():

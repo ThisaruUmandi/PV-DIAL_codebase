@@ -181,6 +181,21 @@ def dc_power(
         )
         outputs = scaled.rename(columns={"p_mp": "p_dc", "v_mp": "v_dc", "i_mp": "i_dc"})
         outputs = outputs[["p_dc", "v_dc", "i_dc"]]
+        # At IL=0 (zero irradiance), the lambertw solver's internal MPP search
+        # (pvlib/singlediode.py's find_minimum call) starts from a degenerate
+        # bracket (v_oc=0 collapses it to a single point) and returns a tiny
+        # nonzero v_mp residual instead of exact 0 -- not NaN, but physically
+        # wrong (no irradiance means no photocurrent means exactly zero output).
+        # inverter.adr() only recognises night at bit-exact v_dc=0.0 (28/09
+        # finding), so this residual otherwise reads as NaN downstream. Force
+        # the true analytic value here, unconditionally (there's nothing
+        # "broken" to detect via isna() -- every one of these values already
+        # looks like a normal finite float).
+        zero_irradiance = effective_irradiance.to_numpy(dtype=float) == 0.0
+        n_forced = int(zero_irradiance.sum())
+        for col in ("p_dc", "v_dc", "i_dc"):
+            outputs.loc[zero_irradiance, col] = 0.0
+        records["effective_irradiance_zero_forced_exact_zero"] = n_forced
         records["diode_params"] = diode_params
 
     else:  # pragma: no cover - guarded by _check_selectable
