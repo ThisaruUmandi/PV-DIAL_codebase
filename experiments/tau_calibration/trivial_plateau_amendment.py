@@ -150,7 +150,7 @@ def trivial_region_masks(k_matrix: np.ndarray, min_s_idx: np.ndarray, valid_mask
 
 
 def amended_plateau_table(
-    k_matrix: np.ndarray,
+    cumsum: np.ndarray,
     tau_grid: np.ndarray,
     candidate_widths: list[float],
     near_trivial_high: np.ndarray,
@@ -161,8 +161,13 @@ def amended_plateau_table(
     Both region masks are interpolated (nearest via >=0.5 threshold on the
     linearly-interpolated boolean-as-float) since a window centre need not
     land exactly on a tau_grid point when width_steps is odd.
+
+    Takes a precomputed change_cumsum(k_matrix) rather than k_matrix itself
+    (unlike tau_calibration.plateau_table) so a caller that also needs cumsum
+    for its own stability-curve plot computes it exactly once -- at the
+    exhaustive C(2058,2)-pair scale this array alone is multiple GB, so
+    computing it twice is a real cost, not just a style nit.
     """
-    cumsum = change_cumsum(k_matrix)
     step = tau_grid[1] - tau_grid[0]
     excluded_at_grid = (near_trivial_high | near_trivial_low).astype(float)
     results = []
@@ -290,7 +295,7 @@ def run_for_seed(seed: int, all_labels, configs_by_label, results, daylight) -> 
     # trivial-region shares above and the plateau search below if included.
     k_valid = k_matrix[valid_mask]
     cumsum = change_cumsum(k_valid)
-    table = amended_plateau_table(k_valid, TAU_GRID, CANDIDATE_WIDTHS, near_trivial_high, near_trivial_low)
+    table = amended_plateau_table(cumsum, TAU_GRID, CANDIDATE_WIDTHS, near_trivial_high, near_trivial_low)
 
     print("Amended plateau table:")
     for c in table:
