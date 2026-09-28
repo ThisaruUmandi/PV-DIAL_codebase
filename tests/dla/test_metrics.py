@@ -137,6 +137,23 @@ def test_resolve_tau_default_and_user_entered():
     assert user_tau.source == TAG_USER_ENTERED
 
 
+def test_production_default_tau_is_0_093():
+    """A literal, load-bearing check of configs/run_defaults.yaml's actual
+    value -- not tautological like test_resolve_tau_default_and_user_entered
+    above (which only confirms resolve_tau reads back whatever's there).
+    28/09: 0.093, experiments/tau_calibration/trivial_plateau_amendment_exhaustive.py
+    (amended plateau rule, exhaustive over all 2,116,653 valid-pair
+    combinations; supersedes N34's 0.234, which the amended rule found
+    100% near-trivial-high across the whole population). If this ever fails,
+    it means run_defaults.yaml's tau changed -- update this test deliberately,
+    don't just silence it, since other tests assume specific outcomes at
+    specific tau values and may need re-tuning too (28/09 found one such
+    case the hard way: test_only_one_qualifying_pair_runs_phase2_and_gates_phase3_per_pair
+    in tests/unit/test_analysis.py, now fixed with its own explicit tau).
+    """
+    assert load_defaults()["dla"]["tau"] == 0.093
+
+
 # --- N_MIN sample-size guard (28/09) ------------------------------------------------
 
 
