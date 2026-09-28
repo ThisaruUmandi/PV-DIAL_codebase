@@ -36,6 +36,7 @@ from typing import Any
 import pandas as pd
 import yaml
 
+from pvdials import report
 from pvdials.config import load_defaults
 from pvdials.data.column_mapper import (
     TAG_USER_ENTERED,
@@ -629,6 +630,7 @@ class AnalysisRunResult:
     load_result: LoadResult
     site_result: SiteStepResult
     pipelines: PipelineRunResult
+    stage_summaries: dict[str, dict[Stage, report.StageSummary]]
     phase1_results: dict[tuple[str, str], PairPhase1Result]
     phase2_result: Phase2Result | None
     phase3_results: dict[tuple[str, str], Phase3Result | Phase3NotComputable | str]
@@ -683,21 +685,28 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
 
     hardware = step_hardware(load_result, site_result, config, defaults)
     pipelines = step_run_pipelines(config, hardware, defaults, analysis_id)
-    save_analysis(analysis_id, config.name, "pipelines_done", inputs_dict)
+    stage_summaries = report.build_stage_summaries(pipelines, site_result.ctx.daylight)
+    pipelines_dict = report.stage_summaries_to_dict(stage_summaries)
+    save_analysis(analysis_id, config.name, "pipelines_done", inputs_dict, pipelines=pipelines_dict)
 
     phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults)
     phase1_dict = {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in phase1_results.items()}
-    save_analysis(analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict)
+    save_analysis(
+        analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict, pipelines=pipelines_dict
+    )
 
     phase2_result = step_phase2(phase1_results)
     phase2_dict = phase2_to_dict(phase2_result, phase1_results)
-    save_analysis(analysis_id, config.name, "phase2_done", inputs_dict, phase1=phase1_dict, phase2=phase2_dict)
+    save_analysis(
+        analysis_id, config.name, "phase2_done", inputs_dict,
+        phase1=phase1_dict, phase2=phase2_dict, pipelines=pipelines_dict,
+    )
 
     phase3_results = step_phase3(pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id)
     phase3_dict = phase3_to_dict(phase3_results)
     save_analysis(
         analysis_id, config.name, "phase3_done", inputs_dict,
-        phase1=phase1_dict, phase2=phase2_dict, phase3=phase3_dict,
+        phase1=phase1_dict, phase2=phase2_dict, phase3=phase3_dict, pipelines=pipelines_dict,
     )
 
     reexec_result = step_reexecution(
@@ -707,6 +716,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     save_analysis(
         analysis_id, config.name, "done", inputs_dict,
         phase1=phase1_dict, phase2=phase2_dict, phase3=phase3_dict, reexec=reexec_dict,
+        pipelines=pipelines_dict,
     )
 
     return AnalysisRunResult(
@@ -715,6 +725,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
         load_result=load_result,
         site_result=site_result,
         pipelines=pipelines,
+        stage_summaries=stage_summaries,
         phase1_results=phase1_results,
         phase2_result=phase2_result,
         phase3_results=phase3_results,
@@ -760,6 +771,7 @@ def build_results_dict(run: AnalysisRunResult) -> dict[str, Any]:
             }
             for label, cfg in run.pipelines.configs.items()
         },
+        "stage_summaries": report.stage_summaries_to_dict(run.stage_summaries),
         "phase1": {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in run.phase1_results.items()},
         "phase2": phase2_to_dict(run.phase2_result, run.phase1_results),
         "phase3": phase3_to_dict(run.phase3_results),

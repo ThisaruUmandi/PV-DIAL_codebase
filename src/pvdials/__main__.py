@@ -21,6 +21,7 @@ from pvdials.analysis import (
 from pvdials.dla.phase1 import OUTCOME_COMPENSATING_DIFFERENCES, OUTCOME_DISAGREEMENT_FOUND
 from pvdials.provenance.analyses import list_analyses
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
+from pvdials.report import build_phase2_rows, build_phase3_rows, resolve_analysis_tau
 
 _OUTCOME_TEXT = {
     1: "nothing to diagnose (no stage exceeds tau)",
@@ -54,13 +55,29 @@ def _print_summary(run) -> None:
                 for problem in vr.problems:
                     print(f"      - {problem}")
 
+    print("\n=== Stage outputs (descriptive; not part of the DLA) ===")
+    for stage in ALL_STAGES:
+        print(f"  {stage.name}")
+        for label in run.pipelines.configs:
+            summary = run.stage_summaries[label][stage]
+            if stage.name == "DECOMPOSITION":
+                detail = f"DNI={summary.dni_kwh_m2:.1f} DHI={summary.dhi_kwh_m2:.1f} kWh/m²"
+            elif stage.name == "TRANSPOSITION":
+                detail = f"POA global={summary.poa_global_kwh_m2:.1f} kWh/m²"
+            elif stage.name == "TEMPERATURE":
+                detail = f"mean={summary.temp_cell_mean_c:.1f}°C max={summary.temp_cell_max_c:.1f}°C"
+            else:
+                detail = f"{summary.annual_energy_kwh:.1f} kWh"
+            print(f"    {label}  {summary.model:<20} {detail}")
+
     print("\n=== Phase 1 (disagreement check) ===")
     for (a, b), p1 in run.phase1_results.items():
         if isinstance(p1, str):
             print(f"  {a}-{b}: {p1}")
             continue
         outcome_text = _OUTCOME_TEXT.get(p1.outcome, str(p1.outcome))
-        print(f"  {a}-{b}: outcome={p1.outcome} ({outcome_text})  k={p1.k}")
+        k_name = p1.k.name if p1.k is not None else "None"
+        print(f"  {a}-{b}: outcome={p1.outcome} ({outcome_text})  k={k_name}")
         for stage in ALL_STAGES:
             m = p1.metrics[stage]
             if m.not_computable_reason is not None:
@@ -72,11 +89,29 @@ def _print_summary(run) -> None:
     if run.phase2_result is None:
         print("  not run — no pair exceeds tau")
     else:
+        tau = resolve_analysis_tau(run.phase1_results)
+        print(f"  Marker '*' = nRMSD exceeds tau ({tau:.4f})")
+        for row in build_phase2_rows(run.phase2_result, tau):
+            print(f"  {row.pair[0]}-{row.pair[1]}")
+            for stage_row in row.stages:
+                marker = "  *" if stage_row.exceeds_tau else ""
+                print(
+                    f"    {stage_row.stage.name:<14} nrmsd={stage_row.nrmsd:.4f}  "
+                    f"delta={stage_row.delta:+.4f}{marker}"
+                )
+        print("  Summary (mean/max across pairs):")
         for stage in ALL_STAGES:
-            print(f"  {stage.name:<14} mean_nrmsd={run.phase2_result.mean_nrmsd[stage]:.4f}  "
+            print(f"    {stage.name:<14} mean_nrmsd={run.phase2_result.mean_nrmsd[stage]:.4f}  "
                   f"max_nrmsd={run.phase2_result.max_nrmsd[stage]:.4f}")
 
     print("\n=== Phase 3 (Shapley attribution) ===")
+    print(
+        "  Sign convention: for pair (X, Y), positive signed phi at a stage means Y's model there "
+        "pushes final AC output higher than X's model would; negative means lower."
+    )
+    phase3_rows_by_pair: dict[tuple[str, str], list] = {}
+    for row in build_phase3_rows(run.phase3_results, run.pipelines.configs):
+        phase3_rows_by_pair.setdefault(row.pair, []).append(row)
     for (a, b), result in run.phase3_results.items():
         print(f"  {a}-{b}:")
         if isinstance(result, str):
@@ -86,10 +121,17 @@ def _print_summary(run) -> None:
         else:
             print(f"    RMSD={result.rmsd_ab:.4f}  efficiency check: "
                   f"sum(phi_final)={sum(result.phi_final.values()):.6f}")
-            for stage in ALL_STAGES:
-                share = result.share[stage]
-                share_str = f"{share:.1%}" if share is not None else "n/a"
-                print(f"      {stage.name:<14} phi_final={result.phi_final[stage]:>9.4f}  share={share_str}")
+            for row in phase3_rows_by_pair[(a, b)]:
+                if row.same_model:
+                    print(f"      {row.stage.name:<14} {row.model_a}: {row.direction_words}")
+                    continue
+                share_str = f"{row.share:.1%}" if row.share is not None else "n/a"
+                print(
+                    f"      {row.stage.name:<14} {row.model_a} -> {row.model_b}  "
+                    f"phi({a}->{b})={row.phi_ab:>9.4f}  phi({b}->{a})={row.phi_ba:>9.4f}  "
+                    f"phi_final={row.phi_final:>9.4f}  share={share_str}  "
+                    f"signed_phi={row.signed_phi:+.4f} ({row.direction_words})"
+                )
 
     print("\n=== Guided re-execution (O4) ===")
     if run.reexec_result is None:

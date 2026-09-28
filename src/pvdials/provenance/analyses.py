@@ -29,16 +29,22 @@ def save_analysis(
     phase2: Any | None = None,
     phase3: Any | None = None,
     reexec: Any | None = None,
+    pipelines: Any | None = None,
 ) -> None:
     """Upsert one analysis row. A plain upsert, not a partial update: pass
     along everything computed so far at each call (including from earlier
     steps), not just what's new since the last save.
+
+    pipelines: per-pipeline descriptive stage-output summaries (report.py's
+    stage_summaries_to_dict output) -- saved here (not just to results.json)
+    so a saved analysis can be reopened read-only via load_analysis() without
+    recomputing anything.
     """
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
-            INSERT INTO analyses (id, name, status, inputs, phase1, phase2, phase3, reexec)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO analyses (id, name, status, inputs, phase1, phase2, phase3, reexec, pipelines)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 status = EXCLUDED.status,
@@ -47,6 +53,7 @@ def save_analysis(
                 phase2 = EXCLUDED.phase2,
                 phase3 = EXCLUDED.phase3,
                 reexec = EXCLUDED.reexec,
+                pipelines = EXCLUDED.pipelines,
                 updated_at = now()
             """,
             (
@@ -58,6 +65,7 @@ def save_analysis(
                 Jsonb(phase2) if phase2 is not None else None,
                 Jsonb(phase3) if phase3 is not None else None,
                 Jsonb(reexec) if reexec is not None else None,
+                Jsonb(pipelines) if pipelines is not None else None,
             ),
         )
         conn.commit()
@@ -80,6 +88,7 @@ def link_record(analysis_id: str, record_id: str) -> None:
 
 _ANALYSIS_FIELDS = (
     "id", "name", "created_at", "updated_at", "status", "inputs", "phase1", "phase2", "phase3", "reexec",
+    "pipelines",
 )
 
 

@@ -36,8 +36,15 @@ CREATE TABLE IF NOT EXISTS analyses (
     phase1     JSONB,
     phase2     JSONB,
     phase3     JSONB,
-    reexec     JSONB
+    reexec     JSONB,
+    pipelines  JSONB
 );
+
+-- 28/09: pipelines (per-pipeline descriptive stage-output summaries, report.py)
+-- added after analyses already shipped -- CREATE TABLE IF NOT EXISTS above is a
+-- no-op on a database that already has the table, so an existing database needs
+-- this explicit, idempotent migration too.
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS pipelines JSONB;
 
 -- Links an analysis to every provenance_records row it touched. A separate
 -- link table, not a run-id column on provenance_records: that table's id is

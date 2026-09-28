@@ -147,25 +147,31 @@ class FinalRunResult:
     disclaimer: str = DISCLAIMER
 
 
-def annual_yield_kwh(result: PipelineResult) -> float:
-    """Annual yield over the FULL, unmasked AC series (every timestep,
-    including correctly-zero night hours) -- the daylight mask exists to
-    avoid zero-inflation in a *comparison*; an energy total needs every
-    hour, or it silently undercounts real output at partial-daylight edges.
-
-    Each row's duration is the gap to its own next timestamp (handles
-    arbitrary-length/irregular uploads); the last row has no next
-    timestamp, so it's assumed equal to the preceding interval.
+def integrate_watts_series_to_kwh(series: pd.Series) -> float:
+    """Integrates a W (or W/m^2) series into kWh (or kWh/m^2) over its FULL,
+    unmasked span (every timestep, including correctly-zero night hours) --
+    a total needs every hour, or it silently undercounts at partial-daylight
+    edges. Each row's duration is the gap to its own next timestamp (handles
+    arbitrary-length/irregular uploads); the last row has no next timestamp,
+    so it's assumed equal to the preceding interval; a single-row series is
+    assumed to span 1 hour. Generic over the input's units -- the row-duration
+    integration is identical whether the series is DC/AC power (-> kWh) or
+    DNI/DHI/POA irradiance (-> kWh/m^2), so this one function serves both.
     """
-    p_ac = result.outputs.ac.outputs["p_ac"]
-    index = p_ac.index
+    index = series.index
     if len(index) < 2:
         hours = pd.Series([1.0], index=index)
     else:
         gap_hours = (index[1:] - index[:-1]).total_seconds() / 3600.0
         hours = pd.Series([*gap_hours, gap_hours[-1]], index=index)
-    energy_wh = float((p_ac.to_numpy() * hours.to_numpy()).sum())
+    energy_wh = float((series.to_numpy() * hours.to_numpy()).sum())
     return energy_wh / 1000.0
+
+
+def annual_yield_kwh(result: PipelineResult) -> float:
+    """Annual AC yield -- see integrate_watts_series_to_kwh for the actual
+    row-duration integration this wraps."""
+    return integrate_watts_series_to_kwh(result.outputs.ac.outputs["p_ac"])
 
 
 @dataclass(frozen=True)
