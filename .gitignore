@@ -9,3 +9,6 @@ data/raw/*
 !data/raw/.gitkeep
 outputs/
 .envdata/weather/
+experiments/evaluation/outputs_run1/
+experiments/evaluation/outputs_step4_old/
+step4_myrun.log

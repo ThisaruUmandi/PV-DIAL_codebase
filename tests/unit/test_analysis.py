@@ -27,7 +27,7 @@ from pvdials.types import Stage
 from tests.dla.mock_adapters import install_mock_model, install_mock_temperature_model
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
-REAL_FILE = Path("/Users/umandi/workfolder/Research/Sandbox/pvlib_test1/tmy_6.944_79.856_2005_2020.csv")
+REAL_FILE = Path("data/weather/tmy_6.944_79.856_2005_2020.csv")
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 

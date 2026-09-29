@@ -56,7 +56,7 @@ from pvdials.physics.registry import (
 from pvdials.physics.site import SiteContext, build_site_context
 from pvdials.types import PipelineConfig
 
-REAL_FILE = Path("/Users/umandi/workfolder/Research/Sandbox/pvlib_test1/tmy_6.944_79.856_2005_2020.csv")
+REAL_FILE = Path(__file__).resolve().parents[2] / "data" / "weather" / "tmy_6.944_79.856_2005_2020.csv"
 MODULE_NAME = "Canadian_Solar_Inc__CS6K_300MS"
 INVERTER_NAME = "ABB__PVI_6000_OUTD_S_US_A__208V_"
 SAMPLE_PAIR_COUNT = 20_000

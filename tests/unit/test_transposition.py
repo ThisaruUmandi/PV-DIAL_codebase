@@ -253,7 +253,7 @@ def test_mismatched_weather_and_context_index_is_rejected():
 
 # --- Real-file regression: the 24-row Stage 2 NaN fix (28/09) ----------------------
 
-REAL_COLOMBO_FILE = Path("data/weather/tmy_6.939_79.854_2005_2023.csv")
+REAL_COLOMBO_FILE = Path("data/weather/tmy_6.944_79.856_2005_2020.csv")
 requires_real_colombo_file = pytest.mark.skipif(
     not REAL_COLOMBO_FILE.exists(), reason=f"Real Colombo file not present at {REAL_COLOMBO_FILE}"
 )

@@ -260,7 +260,7 @@ def test_iam_physical_setting_reaches_the_adapter():
     assert not base.outputs["p_dc"].equals(other.outputs["p_dc"])
 
 
-REAL_COLOMBO_FILE = Path("data/weather/tmy_6.939_79.854_2005_2023.csv")
+REAL_COLOMBO_FILE = Path("data/weather/tmy_6.944_79.856_2005_2020.csv")
 requires_real_colombo_file = pytest.mark.skipif(
     not REAL_COLOMBO_FILE.exists(), reason=f"Real Colombo file not present at {REAL_COLOMBO_FILE}"
 )

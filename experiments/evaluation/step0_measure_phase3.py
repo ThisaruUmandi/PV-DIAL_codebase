@@ -44,7 +44,9 @@ from pvdials.physics.site import build_site_context
 from pvdials.provenance.db import get_connection
 from pvdials.types import ExecutionSet, PipelineConfig
 
-REAL_FILE = Path("data/weather/tmy_6.939_79.854_2005_2023.csv")
+from experiments.evaluation.weather_source import THESIS_WEATHER_FILE, verify_thesis_weather_file
+
+REAL_FILE = THESIS_WEATHER_FILE
 MODULE_NAME = "Canadian_Solar_Inc__CS6K_300MS"
 INVERTER_NAME = "ABB__PVI_6000_OUTD_S_US_A__208V_"
 
@@ -60,7 +62,7 @@ def _shared():
     from pvlib import pvsystem
 
     uploaded = load_uploaded_csv(REAL_FILE)
-    weather = preprocess(uploaded.table, detect_columns(uploaded.table), canonical_year=2023).df
+    weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
     site = detect_site_metadata(uploaded.preamble, uploaded.table)
     offset = TimeOffset(
         0.0, TAG_USER_ENTERED,
@@ -126,6 +128,8 @@ def _derived_record_count() -> int:
 
 
 def main() -> None:
+    weather_info = verify_thesis_weather_file()
+    print(f"Weather file verified: {weather_info}", flush=True)
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM stage_output_values")
         cur.execute("DELETE FROM provenance_records")
