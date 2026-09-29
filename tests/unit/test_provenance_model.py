@@ -71,6 +71,24 @@ def test_document_has_the_three_agents():
     assert agents["pvlib"]["version"] == "0.15.2"
 
 
+def test_the_three_execution_sets_each_get_their_own_named_bundle():
+    """Verification property #26, full coverage: the ORIGINAL-level test
+    above only opened the bundle JSON for ExecutionSet.ORIGINAL. DERIVED and
+    REEXEC go through the same build_document(execution_set=...) call, but
+    that was previously only confirmed indirectly, as separate DB rows
+    (test_phase3.py, test_guided_reexecution.py), never by opening the
+    document and checking its own bundle key.
+    """
+    config, shared, result = _real_run()
+
+    for execution_set in (ExecutionSet.ORIGINAL, ExecutionSet.DERIVED, ExecutionSet.REEXEC):
+        document = build_document(config, shared, result, execution_set.value)
+        parsed = json.loads(document.serialize(format="json"))
+
+        assert set(parsed["bundle"]) == {execution_set.value}
+        assert parsed["bundle"][execution_set.value]["agent"]["pvlib"]["version"] == "0.15.2"
+
+
 def test_weather_entity_carries_its_own_content_hash():
     # 7.4 (replay) needs to recover the weather input from the record alone,
     # not just its rows/start/end.

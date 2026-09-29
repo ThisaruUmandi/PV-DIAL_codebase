@@ -78,3 +78,30 @@ def test_only_pair_curves_appear_never_per_pipeline():
     assert set(phase2.pair_nrmsd.keys()) == {("A", "B"), ("A", "C"), ("B", "C")}
     for label in ("A", "B", "C"):
         assert (label,) not in phase2.pair_nrmsd  # no single-pipeline entries
+
+
+def test_relabelling_pipelines_does_not_change_mean_or_max_nrmsd():
+    """Verification property #2, extended past Phase 1: mean_nrmsd/max_nrmsd
+    are aggregates over the three pairs' nRMSD values, so relabelling which
+    pipeline is A/B/C must not change them -- only nRMSD symmetry (property
+    #1) is needed, not which label owns which pair.
+    """
+    a = _pipeline("A")
+    b = _pipeline("B", dc_scale=1.5, ac_scale=1.5, dc_model="singlediode_desoto")
+    c = _pipeline("C", dc_scale=0.8)
+
+    ab = run_phase1(a.config, a, b.config, b, DAYLIGHT)
+    ac = run_phase1(a.config, a, c.config, c, DAYLIGHT)
+    bc = run_phase1(b.config, b, c.config, c, DAYLIGHT)
+    phase2 = run_phase2(ab, ac, bc)
+
+    # Swap A and B: the same three underlying pairs, addressed differently.
+    ba = run_phase1(b.config, b, a.config, a, DAYLIGHT)
+    bc2 = run_phase1(b.config, b, c.config, c, DAYLIGHT)
+    ac2 = run_phase1(a.config, a, c.config, c, DAYLIGHT)
+    phase2_relabelled = run_phase2(ba, bc2, ac2)
+
+    for stage in Stage:
+        assert phase2_relabelled.mean_nrmsd[stage] == pytest.approx(phase2.mean_nrmsd[stage])
+        assert phase2_relabelled.max_nrmsd[stage] == pytest.approx(phase2.max_nrmsd[stage])
+        assert phase2_relabelled.delta[stage] == pytest.approx(phase2.delta[stage])

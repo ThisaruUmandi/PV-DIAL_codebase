@@ -1,6 +1,7 @@
 """End-to-end orchestrator tests (pvdials/analysis.py)."""
 
 import copy
+import re
 from pathlib import Path
 
 import pytest
@@ -10,8 +11,14 @@ import pvdials.analysis as analysis_module
 from pvdials.analysis import (
     NOT_RUN_OUTCOME_1,
     AnalysisError,
+    PipelineRunResult,
+    build_results_dict,
     parse_analysis_yaml,
     run_analysis,
+    step_disagreement_check,
+    step_hardware,
+    step_load_and_validate,
+    step_site_and_offset,
 )
 from pvdials.config import load_defaults
 from pvdials.provenance.analyses import load_analysis
@@ -264,3 +271,185 @@ def test_only_one_qualifying_pair_runs_phase2_and_gates_phase3_per_pair(tmp_path
     assert not isinstance(run.phase3_results[("A", "B")], str)
     assert run.phase3_results[("A", "C")] == NOT_RUN_OUTCOME_1
     assert run.phase3_results[("B", "C")] == NOT_RUN_OUTCOME_1
+
+
+def test_reexecution_on_an_outcome_1_pair_is_refused(tmp_path, monkeypatch):
+    """Verification property #10, second half: an outcome-1 pair (k is None,
+    nothing to substitute) must refuse an O4 track rather than silently
+    running one. Reuses the same A/B/C setup as the Phase 2/3 gating test
+    above, where A-C is outcome 1, and points reexecution at that pair.
+    """
+    TEST_TAU = 0.10
+    _use_fixed_tau(monkeypatch, TEST_TAU)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_b", "faiman", delta=0.10)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_c", "faiman", delta=0.05)
+
+    overrides = {
+        "weather_file": str(REAL_FILE),
+        "time_offset": {"value_h": 0.0, "reason": "header states 0.5 h; file day/night content aligns with 0 h"},
+        "pipelines": {
+            "A": {**BASE_YAML["pipelines"]["A"], "temperature": "faiman"},
+            "B": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_b"},
+            "C": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_c"},
+        },
+        "reexecution": {"pair": "A-C", "anchor": "A", "candidate": "disc"},
+    }
+
+    with pytest.raises(AnalysisError, match=re.escape(NOT_RUN_OUTCOME_1)):
+        run_analysis(_write_yaml(tmp_path, overrides))
+
+
+def test_step_disagreement_check_passes_the_identical_daylight_object_to_every_pair():
+    """Verification property #15: the daylight mask must be identical for
+    every configuration -- checked here at the point where step_disagreement_check
+    hands it to run_phase1 for each of the three pairs, since that's the one
+    place a per-pair recompute or a copy could slip in. Identity (`is`), not
+    just equality, since analysis.py's own comment claims this is the same
+    ctx.daylight object every time, never rebuilt.
+    """
+    from types import SimpleNamespace
+
+    from tests.dla.builders import DEFAULT_INDEX, all_daylight, make_pipeline_result
+
+    daylight = all_daylight(DEFAULT_INDEX)
+    ctx = SimpleNamespace(daylight=daylight)
+
+    ramp = [400.0, 500.0, 600.0, 600.0, 500.0, 400.0]
+    results = {
+        label: make_pipeline_result(
+            label, decomposition_model=model,
+            dni=ramp, dhi=[v / 4 for v in ramp], poa_global=[v * 1.1 for v in ramp],
+            temp_cell=[v / 10 for v in ramp], p_dc=[v * 3 for v in ramp], p_ac=[v * 2.8 for v in ramp],
+        )
+        for label, model in (("A", "erbs"), ("B", "disc"), ("C", "dirint"))
+    }
+    pipelines = PipelineRunResult(
+        configs={label: r.config for label, r in results.items()},
+        results=results,
+        checks={label: {} for label in results},
+        annual_yield_kwh={label: 0.0 for label in results},
+    )
+
+    seen_daylight_objects = []
+    real_run_phase1 = analysis_module.run_phase1
+
+    def spy_run_phase1(config_a, result_a, config_b, result_b, passed_daylight, **kwargs):
+        seen_daylight_objects.append(passed_daylight)
+        return real_run_phase1(config_a, result_a, config_b, result_b, passed_daylight, **kwargs)
+
+    analysis_module.run_phase1 = spy_run_phase1
+    try:
+        step_disagreement_check(pipelines, ctx, load_defaults())
+    finally:
+        analysis_module.run_phase1 = real_run_phase1
+
+    assert len(seen_daylight_objects) == 3
+    assert all(obj is daylight for obj in seen_daylight_objects)
+
+
+def test_analysis_rejects_a_weather_file_missing_a_required_column(tmp_path):
+    """Verification property #16, end to end: a file missing a required
+    field must be rejected, with the missing field named -- not just the
+    detection primitive (test_column_mapper.py::test_detects_missing_field),
+    but the actual step_load_and_validate/run_analysis rejection path.
+    sample_weather_incomplete.csv is missing wind_speed (confirmed via
+    detect_columns in test_column_mapper.py).
+    """
+    incomplete_file = FIXTURES / "sample_weather_incomplete.csv"
+    overrides = {"weather_file": str(incomplete_file)}
+
+    with pytest.raises(AnalysisError, match="wind_speed"):
+        run_analysis(_write_yaml(tmp_path, overrides))
+
+
+def test_no_comparison_can_contain_both_sapm_and_single_diode(tmp_path):
+    """Verification property #18: step_hardware always loads a CEC-library
+    module (load_module(CEC, ...), analysis.py) -- there is no code path in
+    this app that loads a SANDIA-library module for a real comparison. Since
+    stage4_selectable() gates sapm on module.library == SANDIA and
+    singlediode_desoto/singlediode_cec on module.library == CEC, this single
+    shared module structurally makes sapm unselectable in every comparison
+    this app can actually build, which is a stronger guarantee than "not
+    both" -- confirmed directly against the real hardware-loading path, not
+    just the registry function in isolation (test_registry.py already
+    covers that).
+    """
+    from pvdials.physics.hardware import CEC
+    from pvdials.physics.registry import stage4_selectable
+
+    defaults = load_defaults()
+    config = parse_analysis_yaml(_write_yaml(tmp_path))
+    load_result = step_load_and_validate(config.weather_file)
+    site_result = step_site_and_offset(load_result, config, defaults)
+    hardware = step_hardware(load_result, site_result, config, defaults)
+
+    module = hardware.shared_cec.module
+    assert module.library == CEC
+    sapm_ok, _ = stage4_selectable("sapm", module)
+    cec_ok, _ = stage4_selectable("singlediode_cec", module)
+    desoto_ok, _ = stage4_selectable("singlediode_desoto", module)
+
+    assert sapm_ok is False
+    assert cec_ok is True
+    assert desoto_ok is True
+
+
+def test_dla_output_object_has_every_specified_field(tmp_path, monkeypatch):
+    """Verification property #24, against the field list Umee gave directly
+    (not a spec document in this repo):
+
+    Phase 1, per pair and stage: RMSD, nRMSD, MAD, MBD, systematic share,
+    outcome, k. Phase 2, per pair: nRMSD by stage, mean, max, delta.
+    Phase 3: phi in both directions, phi_final, share, signed phi, the v
+    tables. Pool view: kept separate from the pair results (checked
+    structurally in tests/guards/test_layers.py, not here).
+
+    Reuses the A-B-reaches-outcome-3 setup from
+    test_only_one_qualifying_pair_runs_phase2_and_gates_phase3_per_pair, since
+    field presence for the Phase 2/3 "ran" branches can only be checked on a
+    pair that actually ran them -- an all-outcome-1 run would report Phase 2
+    as "not run" and every Phase 3 pair as a bare string, with none of the
+    fields below present at all (by design, not a defect).
+
+    Not renaming anything: this only asserts presence, using the exact
+    field names phase1_to_dict/phase2_to_dict/phase3_pair_to_dict already
+    use (systematic_share, mean_nrmsd, max_nrmsd, phi_ab, phi_ba, phi_final,
+    signed_phi, v_ab, v_ba, signed_v).
+    """
+    TEST_TAU = 0.10
+    _use_fixed_tau(monkeypatch, TEST_TAU)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_b", "faiman", delta=0.10)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_c", "faiman", delta=0.05)
+
+    overrides = {
+        "weather_file": str(REAL_FILE),
+        "time_offset": {"value_h": 0.0, "reason": "header states 0.5 h; file day/night content aligns with 0 h"},
+        "pipelines": {
+            "A": {**BASE_YAML["pipelines"]["A"], "temperature": "faiman"},
+            "B": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_b"},
+            "C": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_c"},
+        },
+    }
+    run = run_analysis(_write_yaml(tmp_path, overrides))
+    output = build_results_dict(run)
+
+    # Phase 1, per pair and stage.
+    p1_ab = output["phase1"]["A-B"]
+    assert p1_ab["status"] == "ran"
+    assert "outcome" in p1_ab
+    assert "k" in p1_ab
+    for stage_metrics in p1_ab["metrics"]:
+        for field in ("rmsd", "nrmsd", "mad", "mbd", "systematic_share"):
+            assert field in stage_metrics, f"Phase 1 metrics missing {field!r}: {stage_metrics}"
+
+    # Phase 2, per pair (nRMSD by stage) plus the aggregate fields.
+    p2 = output["phase2"]
+    assert p2["status"] == "ran"
+    for field in ("pair_nrmsd", "mean_nrmsd", "max_nrmsd", "delta"):
+        assert field in p2, f"Phase 2 missing {field!r}: {sorted(p2)}"
+
+    # Phase 3.
+    p3_ab = output["phase3"]["A-B"]
+    assert p3_ab["status"] == "ran"
+    for field in ("phi_ab", "phi_ba", "phi_final", "share", "signed_phi", "v_ab", "v_ba", "signed_v"):
+        assert field in p3_ab, f"Phase 3 missing {field!r}: {sorted(p3_ab)}"

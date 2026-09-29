@@ -330,6 +330,20 @@ def test_effective_irradiance_path_recorded():
     assert "sapm" in sapm_path.records["effective_irradiance_path"]
 
 
+@pytest.mark.parametrize("model", ["pvwatts_dc", "singlediode_desoto", "singlediode_cec"])
+def test_effective_irradiance_path_recorded_for_every_no_spectral_model(model):
+    """Verification property #17, full coverage: NO_SPECTRAL_MODELS lists
+    three models (dc.py); the original test above only exercised pvwatts_dc
+    directly against sapm. singlediode_desoto/singlediode_cec take the same
+    branch and must be checked too, not inferred from pvwatts_dc alone.
+    """
+    weather, ctx = _day()
+
+    result = _dc(model, weather, ctx, module=CEC_MODULE)
+
+    assert "no_spectral" in result.records["effective_irradiance_path"]
+
+
 def test_same_input_twice_gives_identical_output():
     weather, ctx = _fixture()
     for model in STAGE4_SELECTABLE:

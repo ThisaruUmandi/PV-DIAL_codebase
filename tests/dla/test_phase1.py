@@ -1,7 +1,9 @@
 import pandas as pd
 import pytest
 
+import pvdials.dla.phase1 as phase1_module
 from pvdials.config import load_defaults
+from pvdials.dla.metrics import PairMetrics
 from pvdials.dla.phase1 import (
     OUTCOME_COMPENSATING_DIFFERENCES,
     OUTCOME_DISAGREEMENT_FOUND,
@@ -146,3 +148,55 @@ def test_tau_is_recorded_on_the_result():
 
     assert phase1.tau.value == 0.2
     assert phase1.tau.source == "user_entered"
+
+
+@pytest.mark.parametrize(
+    "profile",
+    [
+        [0.01, 0.01, 0.01, 0.01, 0.01],  # nothing over tau
+        [0.50, 0.01, 0.01, 0.01, 0.01],  # only stage 1 over tau, AC under -> outcome 3
+        [0.01, 0.50, 0.01, 0.01, 0.01],  # only stage 2 over tau, AC under -> outcome 3
+        [0.01, 0.01, 0.50, 0.01, 0.01],  # only stage 3 over tau, AC under -> outcome 3
+        [0.01, 0.01, 0.01, 0.50, 0.01],  # only stage 4 over tau, AC under -> outcome 3
+        [0.50, 0.01, 0.01, 0.01, 0.50],  # stage 1 and AC both over tau -> outcome 2
+        [0.01, 0.50, 0.01, 0.01, 0.50],  # stage 2 and AC both over tau -> outcome 2
+        [0.01, 0.01, 0.01, 0.01, 0.50],  # only AC over tau -> outcome 2 (k=AC)
+        [0.50, 0.50, 0.50, 0.50, 0.50],  # every stage over tau -> outcome 2
+        [0.09, 0.09, 0.09, 0.09, 0.09],  # every stage exactly at tau (not over) -> outcome 1
+    ],
+)
+def test_outcome_3_occurs_exactly_when_some_upstream_stage_is_over_tau_and_ac_is_not(
+    monkeypatch, profile
+):
+    """Verification property #11, "only when" direction, over a grid of
+    nRMSD profiles (not just one constructed case): outcome 3 must occur if
+    and only if some stage's nrmsd exceeds tau AND Stage.AC's does not.
+    Monkeypatches pair_metrics itself (queued per call, in _STAGES_IN_ORDER)
+    so the nRMSD grid is set directly, without needing real series whose
+    RMSD happens to land on a target value.
+    """
+    tau_value = 0.09
+    queue = list(profile)
+
+    def fake_pair_metrics(series_a, series_b, p5, p95):
+        nrmsd = queue.pop(0)
+        return PairMetrics(
+            rmsd=nrmsd, nrmsd=nrmsd, mad=0.0, mbd=0.0, systematic_share=None,
+            n_pooled=100, not_computable_reason=None,
+        )
+
+    monkeypatch.setattr(phase1_module, "pair_metrics", fake_pair_metrics)
+
+    result_a = _baseline("A")
+    result_b = _baseline("B")
+    phase1 = run_phase1(
+        result_a.config, result_a, result_b.config, result_b, DAYLIGHT, tau_value=tau_value
+    )
+
+    some_upstream_over_tau = any(v > tau_value for v in profile)
+    ac_over_tau = profile[4] > tau_value
+
+    if some_upstream_over_tau and not ac_over_tau:
+        assert phase1.outcome == OUTCOME_COMPENSATING_DIFFERENCES
+    else:
+        assert phase1.outcome != OUTCOME_COMPENSATING_DIFFERENCES

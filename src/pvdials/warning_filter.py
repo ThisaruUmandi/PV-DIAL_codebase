@@ -6,11 +6,13 @@ __main__.py, so a Streamlit app can wrap the same call with the same filter.
 
 from __future__ import annotations
 
+import re
 import warnings
 from typing import Self
 
 _TARGET_MESSAGE = "invalid value encountered in divide"
 _TARGET_FILENAME_SUFFIX = "_chandrupatla.py"
+_TARGET_MODULE = r".*chandrupatla"
 
 
 class ChandrupatlaWarningFilter:
@@ -29,7 +31,17 @@ class ChandrupatlaWarningFilter:
     def __enter__(self) -> Self:
         self._catcher = warnings.catch_warnings()
         self._catcher.__enter__()
-        warnings.simplefilter("always")
+        # Force only this one warning past Python's default "once per
+        # location" dedup, so every occurrence reaches showwarning below and
+        # gets counted. Every other warning keeps its normal filter
+        # behaviour -- unlike simplefilter("always"), which would reset the
+        # whole filter list.
+        warnings.filterwarnings(
+            "always",
+            message=re.escape(_TARGET_MESSAGE),
+            category=RuntimeWarning,
+            module=_TARGET_MODULE,
+        )
         original_showwarning = warnings.showwarning
 
         def showwarning(message, category, filename, lineno, file=None, line=None):

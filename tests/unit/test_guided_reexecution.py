@@ -259,6 +259,30 @@ def test_retry_never_chains_onto_a_previous_attempt(monkeypatch):
     assert second.pair == session.pair
 
 
+def test_a_substituted_config_is_sealed_to_its_own_pair(monkeypatch):
+    """Verification property #20: a config produced by one pair's session
+    must never be indistinguishable from one produced by another pair's
+    session. _run_substitution's label is built from self.pair
+    (guided_reexecution.py), so two sessions differing only in `pair` --
+    same anchor_config, same stage, same candidate -- must still produce
+    configs with different labels, tagged to their own track.
+    """
+    import dataclasses
+
+    session_ab = _session(monkeypatch, load_defaults())
+    session_ad = dataclasses.replace(session_ab, pair=("A", "D"))
+
+    candidate = next(c.name for c in session_ab.alternatives() if c.selectable)
+
+    result_ab = session_ab.propose(candidate)
+    result_ad = session_ad.propose(candidate)
+
+    assert result_ab.pair == ("A", session_ab.other_config.label)
+    assert result_ad.pair == ("A", "D")
+    assert result_ab.config.label != result_ad.config.label
+    assert result_ab.config != result_ad.config
+
+
 @requires_postgres
 def test_propose_and_confirm_are_recorded_as_reexec(monkeypatch):
     with get_connection() as conn:

@@ -117,7 +117,9 @@ irradiance), counted and summarised in one line at the end of CLI output; other 
 show; test that an unrelated RuntimeWarning is not suppressed.
 
 ### Step 1 — Verification: the 24 properties as unit tests
-From the build KT: a table of each of the 24 properties → the test(s) covering it → pass/fail.
+From `docs/verification-properties.md` (section 9 of my Evaluation Planning KT, 22/09; the
+supervisor calls them "the 24 properties"; the table has 26 rows, so use all 26): a table of each
+property → the test(s) covering it → pass/fail.
 Flag any property with no test and propose one. If any of these are not among the 24, add them to
 the table too: symmetry nRMSD(X,Y) = nRMSD(Y,X); nRMSD(X,X) = 0; Shapley efficiency within ε;
 exactly 2^|S| derived configurations with correct membership; °C/K invariance of Stage 3 nRMSD;

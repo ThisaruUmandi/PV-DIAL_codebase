@@ -220,6 +220,91 @@ def test_run_phase3_real_end_to_end_satisfies_efficiency_and_reports_signed_sens
         assert math.isfinite(result.share[stage])
 
 
+def test_stage_not_in_s_gets_phi_final_zero():
+    """Verification property #8, first half: a stage where both pipelines
+    use the same model is never in S, so it can never be the coalition that
+    changes AC output -- phi_final there must be exactly 0. CONFIG_A/CONFIG_B
+    share dc_model and ac_model (both pvwatts_dc/pvwatts); this checks that
+    explicitly, rather than only checking share[stage] is finite as the
+    efficiency test above does.
+
+    Representation note (per project decision): the output object stores
+    this as 0.0, not a null/None -- confirmed here, not changed.
+    """
+    shared = _shared()
+    defaults = load_defaults()
+    result_a = run_pipeline(CONFIG_A, shared, defaults)
+    result_b = run_pipeline(CONFIG_B, shared, defaults)
+
+    result = run_phase3(
+        CONFIG_A, result_a, CONFIG_B, result_b,
+        shared_cec=shared, shared_adr=shared, daylight=shared.ctx.daylight,
+        defaults=defaults, record=False,
+    )
+
+    assert CONFIG_A.dc_model == CONFIG_B.dc_model
+    assert CONFIG_A.ac_model == CONFIG_B.ac_model
+    assert result.phi_final[Stage.DC] == 0.0
+    assert result.phi_final[Stage.AC] == 0.0
+    assert result.signed_phi[Stage.DC] == 0.0
+    assert result.signed_phi[Stage.AC] == 0.0
+
+
+def test_pair_differing_at_exactly_one_stage_gives_it_100_percent_share():
+    """Verification property #8, second half: |S|=1 means the full 32-member
+    coalition space still degenerates to 2 physically distinct configs (the
+    two endpoints), so the one stage in S must take the entire RMSD -- share
+    == 1.0, every other stage's phi_final == 0.
+    """
+    shared = _shared()
+    defaults = load_defaults()
+    config_a = PipelineConfig("A", "erbs", "isotropic", "faiman", "pvwatts_dc", "pvwatts")
+    config_b = PipelineConfig("B", "erbs", "haydavies", "faiman", "pvwatts_dc", "pvwatts")
+    result_a = run_pipeline(config_a, shared, defaults)
+    result_b = run_pipeline(config_b, shared, defaults)
+
+    result = run_phase3(
+        config_a, result_a, config_b, result_b,
+        shared_cec=shared, shared_adr=shared, daylight=shared.ctx.daylight,
+        defaults=defaults, record=False,
+    )
+
+    assert result.share[Stage.TRANSPOSITION] == pytest.approx(1.0, abs=1e-9)
+    for stage in ALL_STAGES:
+        if stage != Stage.TRANSPOSITION:
+            assert result.phi_final[stage] == 0.0
+
+
+def test_relabelling_the_pair_does_not_change_phi_final_or_share():
+    """Verification property #2, extended past Phase 1: phi_final is already
+    the average of both anchor directions, so swapping which config is X and
+    which is Y must leave phi_final/rmsd_ab/share unchanged -- only
+    signed_phi is expected to flip sign (it reports a direction, not a
+    magnitude). record=False: this only needs the physics, not provenance.
+    """
+    shared = _shared()
+    defaults = load_defaults()
+    result_a = run_pipeline(CONFIG_A, shared, defaults)
+    result_b = run_pipeline(CONFIG_B, shared, defaults)
+
+    ab = run_phase3(
+        CONFIG_A, result_a, CONFIG_B, result_b,
+        shared_cec=shared, shared_adr=shared, daylight=shared.ctx.daylight,
+        defaults=defaults, record=False,
+    )
+    ba = run_phase3(
+        CONFIG_B, result_b, CONFIG_A, result_a,
+        shared_cec=shared, shared_adr=shared, daylight=shared.ctx.daylight,
+        defaults=defaults, record=False,
+    )
+
+    assert ab.rmsd_ab == pytest.approx(ba.rmsd_ab)
+    for stage in ALL_STAGES:
+        assert ab.phi_final[stage] == pytest.approx(ba.phi_final[stage], abs=1e-9)
+        assert ab.share[stage] == pytest.approx(ba.share[stage], abs=1e-9)
+        assert ab.signed_phi[stage] == pytest.approx(-ba.signed_phi[stage], abs=1e-9)
+
+
 @requires_postgres
 def test_run_phase3_records_every_derived_run_as_execution_set_derived():
     """Closes the O2 gap: Phase 3's derived-pipeline runs must be

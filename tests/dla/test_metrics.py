@@ -47,6 +47,7 @@ def test_nrmsd_is_symmetric():
     ba = pair_metrics(b, a, p5, p95)
 
     assert ab.not_computable_reason is None
+    assert ab.rmsd == pytest.approx(ba.rmsd)
     assert ab.nrmsd == pytest.approx(ba.nrmsd)
     assert ab.mbd == pytest.approx(-ba.mbd)
 
