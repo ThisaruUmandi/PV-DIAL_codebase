@@ -60,6 +60,26 @@ def _real_run():
     return config, shared, result
 
 
+def test_site_context_entity_carries_tau_value_and_source():
+    """Verification property #25: tau (value + origin tag) must be recorded
+    in every provenance record. site_context's attrs come generically from
+    shared.ctx.settings (build_document(), model.py) -- build_site_context()
+    (physics/site.py) is where tau_value/tau_source actually get added, so
+    this confirms they survive that generic copy into the serialized
+    document, not just that they exist on ctx.settings (already covered by
+    tests/unit/test_site.py).
+    """
+    config, shared, result = _real_run()
+    document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)
+
+    parsed = json.loads(document.serialize(format="json"))["bundle"]["original"]
+    site_attrs = parsed["entity"]["site_context"]
+
+    d = load_defaults()
+    assert float(_value(site_attrs["tau_value"])) == d["dla"]["tau"]
+    assert _value(site_attrs["tau_source"]) == "default"
+
+
 def test_document_has_the_three_agents():
     config, shared, result = _real_run()
     document = build_document(config, shared, result, ExecutionSet.ORIGINAL.value)

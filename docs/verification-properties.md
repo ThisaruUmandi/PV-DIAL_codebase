@@ -47,4 +47,18 @@ defect.**_
   reason strings, CLI output, report module); the interface part is checked after it is built.
 - **#25:** τ-in-provenance was an open item (N35) when last recorded. If it is not there, report
   it as a failed property; do not add it without a plan I approve.
+  **29/09 update: fixed, approved plan built.** τ was absent from `provenance/model.py`/
+  `recorder.py` (confirmed by direct read: `tau` appeared nowhere in either file). Fix:
+  `physics/site.py::build_site_context()` now takes optional `tau`/`tau_source`, resolved once
+  in `run_analysis()` via the existing `resolve_tau()` (unchanged elsewhere — Phase 1's own
+  per-pair calls still happen exactly as before) and threaded through `step_site_and_offset()`.
+  `tau_value`/`tau_source` ride into every provenance record automatically via the existing
+  generic `ctx.settings` → `site_context` entity copy in `build_document()` — no changes to
+  `model.py`, `recorder.py`, `dla/phase1.py`, `dla/phase3.py`, or `guided_reexecution.py`.
+  Verified on a real run: every ORIGINAL/DERIVED record's `site_context.tau_value` matches the
+  tau that pair's own Phase 1 result used, and all records within one analysis share the same
+  value, at both the live default and an overridden τ. Phase 3 φ/v-tables and the replay test are
+  confirmed unchanged (reran both suites). Record-hash consequence: every new provenance
+  record's content-hash id changes going forward (site_context's serialized content is now
+  different); existing pre-fix rows are not backfilled and permanently lack τ.
 - **#18:** check against the current hardware/pool rules and say how it is guaranteed.

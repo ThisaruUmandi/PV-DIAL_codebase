@@ -52,6 +52,7 @@ from pvdials.data.validate import (
     run_all_validations,
     validate_physical_consistency,
 )
+from pvdials.dla.metrics import Tau, resolve_tau
 from pvdials.dla.phase1 import PairPhase1Result, run_phase1
 from pvdials.dla.phase2 import Phase2Result, run_phase2
 from pvdials.dla.phase3 import (
@@ -210,11 +211,19 @@ class SiteStepResult:
     offset_report: tuple  # tuple[OffsetCandidate, ...] from offset_consistency_report
 
 
-def step_site_and_offset(load_result: LoadResult, config: AnalysisConfig, defaults: dict) -> SiteStepResult:
+def step_site_and_offset(
+    load_result: LoadResult, config: AnalysisConfig, defaults: dict, tau: Tau
+) -> SiteStepResult:
     """Builds the SiteContext from the YAML-given offset (not re-detected --
     the value+reason are a direct input), then runs Tier 4 (which needs the
     zenith series this just produced) and the offset-preset comparison
     report together -- Gap A: Tier 4 structurally can't run before this.
+
+    tau: the run's already-resolved Tau (run_analysis(), via resolve_tau()),
+    threaded into build_site_context() so every provenance record's
+    site_context entity carries it (verification property #25). Phase 1's
+    own per-pair resolve_tau() call is unaffected -- see the comment at
+    run_analysis()'s early call.
     """
     site = detect_site_metadata(load_result.uploaded.preamble, load_result.uploaded.table)
     if not site.is_complete():
@@ -226,7 +235,9 @@ def step_site_and_offset(load_result: LoadResult, config: AnalysisConfig, defaul
 
     offset = TimeOffset(config.offset_value_h, TAG_USER_ENTERED, override_reason=config.offset_reason)
     try:
-        ctx = build_site_context(load_result.weather, site, offset, defaults)
+        ctx = build_site_context(
+            load_result.weather, site, offset, defaults, tau=tau.value, tau_source=tau.source
+        )
     except Exception as exc:
         raise AnalysisError(f"Step 1 (input data and configuration) failed: {exc}") from exc
 
@@ -654,6 +665,17 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     analysis_id = analysis_id or uuid.uuid4().hex
     config = parse_analysis_yaml(yaml_path)
     defaults = load_defaults()
+    # tau is now resolved in two places: here (early, so the SiteContext and
+    # every provenance record can carry it) and again, unchanged, once per
+    # pair inside run_phase1() (dla/phase1.py, via step_disagreement_check).
+    # Both calls use the same resolve_tau(None, defaults) with the same
+    # defaults object, so they are guaranteed to agree -- not restructuring
+    # Phase 1 to remove the second call. If analysis.yaml ever gains a real
+    # tau-override field, that value must reach BOTH call sites, ideally by
+    # resolving once here and threading the result into
+    # step_disagreement_check too, rather than letting the two resolutions
+    # drift apart.
+    tau = resolve_tau(None, defaults)
     inputs_dict = {
         "name": config.name,
         "weather_file": config.weather_file,
@@ -680,7 +702,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     load_result = step_load_and_validate(config.weather_file)
     save_analysis(analysis_id, config.name, "load_done", inputs_dict)
 
-    site_result = step_site_and_offset(load_result, config, defaults)
+    site_result = step_site_and_offset(load_result, config, defaults, tau)
     save_analysis(analysis_id, config.name, "site_done", inputs_dict)
 
     hardware = step_hardware(load_result, site_result, config, defaults)

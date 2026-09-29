@@ -374,13 +374,15 @@ def test_no_comparison_can_contain_both_sapm_and_single_diode(tmp_path):
     just the registry function in isolation (test_registry.py already
     covers that).
     """
+    from pvdials.dla.metrics import resolve_tau
     from pvdials.physics.hardware import CEC
     from pvdials.physics.registry import stage4_selectable
 
     defaults = load_defaults()
     config = parse_analysis_yaml(_write_yaml(tmp_path))
     load_result = step_load_and_validate(config.weather_file)
-    site_result = step_site_and_offset(load_result, config, defaults)
+    tau = resolve_tau(None, defaults)
+    site_result = step_site_and_offset(load_result, config, defaults, tau)
     hardware = step_hardware(load_result, site_result, config, defaults)
 
     module = hardware.shared_cec.module
@@ -453,3 +455,109 @@ def test_dla_output_object_has_every_specified_field(tmp_path, monkeypatch):
     assert p3_ab["status"] == "ran"
     for field in ("phi_ab", "phi_ba", "phi_final", "share", "signed_phi", "v_ab", "v_ba", "signed_v"):
         assert field in p3_ab, f"Phase 3 missing {field!r}: {sorted(p3_ab)}"
+
+
+def _run_ab_outcome3_analysis(tmp_path, monkeypatch, fixed_tau: float | None):
+    """Shared setup: A-B reaches outcome 3, A-C/B-C reach outcome 1 -- same
+    construction as test_only_one_qualifying_pair_runs_phase2_and_gates_
+    phase3_per_pair, reused here for the tau-provenance tests. Works at both
+    the live default (0.093) and TEST_TAU=0.10: the mock deltas were sized
+    with enough margin (A-B's temp_nrmsd ~0.139, A-C/B-C's ~0.070-0.073) to
+    clear or stay under either threshold the same way.
+    """
+    if fixed_tau is not None:
+        _use_fixed_tau(monkeypatch, fixed_tau)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_b", "faiman", delta=0.10)
+    install_mock_model(monkeypatch, Stage.TEMPERATURE, "mock_c", "faiman", delta=0.05)
+
+    overrides = {
+        "weather_file": str(REAL_FILE),
+        "time_offset": {"value_h": 0.0, "reason": "header states 0.5 h; file day/night content aligns with 0 h"},
+        "pipelines": {
+            "A": {**BASE_YAML["pipelines"]["A"], "temperature": "faiman"},
+            "B": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_b"},
+            "C": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_c"},
+        },
+    }
+    return run_analysis(_write_yaml(tmp_path, overrides))
+
+
+def _tau_values_recorded_for_analysis(analysis_id: str) -> list[float]:
+    """Every provenance record linked to this analysis (any execution set),
+    reading tau_value straight out of its own document's site_context
+    entity -- the actual recorded value, not what the caller expects it to
+    be.
+    """
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT pr.document FROM provenance_records pr "
+            "JOIN analysis_records ar ON ar.record_id = pr.id "
+            "WHERE ar.analysis_id = %s",
+            (analysis_id,),
+        )
+        rows = cur.fetchall()
+
+    values = []
+    for (document,) in rows:
+        bundle_name = next(iter(document["bundle"]))
+        site_context = document["bundle"][bundle_name]["entity"]["site_context"]
+        values.append(float(site_context["tau_value"]["$"]))
+    return values
+
+
+@pytest.mark.parametrize("fixed_tau", [None, 0.10], ids=["live_default", "overridden"])
+def test_recorded_tau_equals_phase1_tau(tmp_path, monkeypatch, fixed_tau):
+    """Verification property #25, the wiring end to end: every provenance
+    record's tau_value must equal the tau the pair's own Phase 1 result
+    used -- not just build_site_context()'s own fallback (test_site.py) --
+    checked at both the live default and an explicitly overridden tau, since
+    the override must reach the early resolve_tau() call in run_analysis()
+    the same way it already reaches every per-pair run_phase1() call.
+    """
+    run = _run_ab_outcome3_analysis(tmp_path, monkeypatch, fixed_tau)
+    expected_tau = run.phase1_results[("A", "B")].tau.value
+
+    recorded = _tau_values_recorded_for_analysis(run.analysis_id)
+    assert recorded, "expected at least one provenance record for this analysis"
+    for value in recorded:
+        assert value == pytest.approx(expected_tau)
+
+
+def test_every_record_in_one_analysis_shares_the_same_tau_value(tmp_path, monkeypatch):
+    """Verification property #25, "constant within a run": the ORIGINAL
+    pipeline records (A, B, C) and the DERIVED records (Phase 3's
+    coalitions) must all carry the identical tau_value -- not merely each
+    individually matching some tau, but all matching EACH OTHER.
+
+    Needs a pair with |S| >= 2 to actually produce DERIVED records (a
+    |S| = 1 pair, like the temperature-only setup above, needs zero derived
+    runs -- both endpoints are already-known results, per Step 0's dedup
+    fix). A-B differs at TRANSPOSITION (large delta, crosses tau, so Phase 3
+    runs) and TEMPERATURE (small delta, stays under tau, but still counts
+    toward S since S is about which MODEL is used, not its nRMSD).
+    """
+    TEST_TAU = 0.10
+    _use_fixed_tau(monkeypatch, TEST_TAU)
+    install_mock_model(monkeypatch, Stage.TRANSPOSITION, "mock_transposition", "isotropic", delta=0.30)
+    install_mock_temperature_model(monkeypatch, "mock_temperature", "faiman", delta=0.02)
+
+    overrides = {
+        "weather_file": str(REAL_FILE),
+        "time_offset": {"value_h": 0.0, "reason": "header states 0.5 h; file day/night content aligns with 0 h"},
+        "pipelines": {
+            "A": {**BASE_YAML["pipelines"]["A"]},
+            "B": {
+                **BASE_YAML["pipelines"]["A"],
+                "transposition": "mock_transposition",
+                "temperature": "mock_temperature",
+            },
+            "C": {**BASE_YAML["pipelines"]["A"]},
+        },
+    }
+    run = run_analysis(_write_yaml(tmp_path, overrides))
+    assert run.phase1_results[("A", "B")].outcome != 1
+    assert not isinstance(run.phase3_results[("A", "B")], str)
+
+    recorded = _tau_values_recorded_for_analysis(run.analysis_id)
+    assert len(recorded) >= 4, "expected ORIGINAL (3) plus at least one DERIVED record"
+    assert len(set(recorded)) == 1, f"tau_value differs across records: {sorted(set(recorded))}"

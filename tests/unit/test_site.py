@@ -155,6 +155,30 @@ def test_settings_carry_every_value_used():
     assert ctx.settings["pvlib_version"] == "0.15.2"
 
 
+def test_tau_defaults_to_run_defaults_when_not_passed():
+    """Verification property #25: tau_value/tau_source must be present in
+    every provenance record's site_context entity, which comes from here.
+    With no explicit tau passed, falls back to defaults["dla"]["tau"] and
+    "default" -- the same fallback resolve_tau() itself would produce for an
+    unset user value (dla/metrics.py), kept in sync by inspection since
+    importing resolve_tau here would be circular.
+    """
+    ctx = build_site_context(_day(), _site(**COLOMBO), NO_OFFSET)
+    d = load_defaults()
+
+    assert ctx.settings["tau_value"] == d["dla"]["tau"]
+    assert ctx.settings["tau_source"] == "default"
+
+
+def test_tau_passed_explicitly_overrides_the_default():
+    ctx = build_site_context(
+        _day(), _site(**COLOMBO), NO_OFFSET, tau=0.15, tau_source="user_entered"
+    )
+
+    assert ctx.settings["tau_value"] == 0.15
+    assert ctx.settings["tau_source"] == "user_entered"
+
+
 def test_airmass_and_dni_extra_defined_on_daylight_rows():
     ctx = build_site_context(_day(), _site(**COLOMBO), NO_OFFSET)
 

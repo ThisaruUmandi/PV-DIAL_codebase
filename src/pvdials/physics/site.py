@@ -122,17 +122,32 @@ def build_site_context(
     site: SiteMetadata,
     offset: TimeOffset,
     defaults: dict | None = None,
+    tau: float | None = None,
+    tau_source: str | None = None,
 ) -> SiteContext:
     """Compute solar position once, plus airmass, extraterrestrial DNI and the daylight mask.
 
     weather: cleaned table from data.preprocess (canonical UTC index, temp_air,
     optional pressure in Pa).
+
+    tau/tau_source: the run's already-resolved tau (dla.metrics.resolve_tau()),
+    passed in by the caller so the value ends up in settings (and, from
+    there, in every provenance record's site_context entity, verification
+    property #25). Not imported from dla.metrics here -- dla/metrics.py
+    imports physics/pipeline.py, which imports this module, so resolving
+    tau here directly would be a circular import. Defaults to this
+    function's own reading of defaults["dla"]["tau"]/"default" only when the
+    caller passes neither -- the same fallback resolve_tau() itself would
+    produce for an unset user value, kept in sync by inspection, not by a
+    shared call.
     """
     defaults = defaults or load_defaults()
     sp_cfg = defaults["solar_position"]
     am_cfg = defaults["airmass"]
     et_cfg = defaults["extraterrestrial"]
     mask_max = float(defaults["dla"]["daylight_mask_zenith_max_deg"])
+    tau_value = float(tau) if tau is not None else float(defaults["dla"]["tau"])
+    tau_source_value = tau_source if tau_source is not None else "default"
 
     for required in ("latitude", "longitude"):
         if required not in site.values:
@@ -229,6 +244,8 @@ def build_site_context(
         "sp_surface_tolerance": sp_cfg["sp_surface_tolerance"],
         "time_offset_h": offset.value_h,
         "time_offset_source": offset.source,
+        "tau_value": tau_value,
+        "tau_source": tau_source_value,
         "radiation_database": radiation_database,
         "airmass_model": am_cfg["model"],
         "airmass_zenith": "apparent",
