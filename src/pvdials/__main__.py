@@ -22,6 +22,7 @@ from pvdials.dla.phase1 import OUTCOME_COMPENSATING_DIFFERENCES, OUTCOME_DISAGRE
 from pvdials.provenance.analyses import list_analyses
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
 from pvdials.report import build_phase2_rows, build_phase3_rows, resolve_analysis_tau
+from pvdials.warning_filter import ChandrupatlaWarningFilter
 
 _OUTCOME_TEXT = {
     1: "nothing to diagnose (no stage exceeds tau)",
@@ -145,13 +146,16 @@ def _print_summary(run) -> None:
 
 def cmd_run(args: argparse.Namespace) -> int:
     try:
-        run = run_analysis(args.yaml_path)
+        with ChandrupatlaWarningFilter() as warning_filter:
+            run = run_analysis(args.yaml_path)
     except AnalysisError as exc:
         print(f"FAILED: {exc}", file=sys.stderr)
         return 1
     _print_summary(run)
     write_outputs(run, args.out)
     print(f"\nWrote results.json, stage_outputs.csv, provenance.json to {args.out}")
+    if warning_filter.count > 0:
+        print(f"Suppressed {warning_filter.count} known scipy chandrupatla 0/0 warnings (zero irradiance).")
     return 0
 
 

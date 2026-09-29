@@ -38,6 +38,7 @@ import pandas as pd
 
 from pvdials.config import load_defaults
 from pvdials.dla.metrics import stage_series
+from pvdials.dla.phase1 import _differing_stages
 from pvdials.physics.hardware import ADR_INVERTER, CEC_INVERTER
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.registry import dc_model_produces_v_dc, stage5_selectable
@@ -154,52 +155,79 @@ def shapley_values(
     return phi
 
 
-def _coalition_series_cache(
-    config_anchor: PipelineConfig,
-    result_anchor: PipelineResult,
-    config_other: PipelineConfig,
-    result_other: PipelineResult,
+def _shared_ac_series_cache(
+    config_a: PipelineConfig,
+    result_a: PipelineResult,
+    config_b: PipelineConfig,
+    result_b: PipelineResult,
     shared_cec: SharedInputs,
     shared_adr: SharedInputs,
     defaults: dict,
     daylight: pd.Series,
+    record: bool = True,
     on_record: Callable[[str], None] | None = None,
-) -> dict[frozenset[Stage], pd.Series]:
-    """Final-AC, daylight-masked series for every one of the 32 coalitions,
-    in one direction (config_anchor fixed), computed exactly once.
+) -> tuple[dict[frozenset[Stage], pd.Series], frozenset[Stage]]:
+    """Final-AC, daylight-masked series for every one of the 2^|S| distinct
+    configs (S = the stages where config_a and config_b differ), keyed by
+    'which S-stages take config_b's model' -- shared by BOTH v_ab and v_ba
+    (see _expand_to_full_cache), computed exactly once each.
 
-    T=empty and T=full-set are free: they're exactly config_anchor's and
-    config_other's own already-known results (no new pipeline run). Both
-    the RMSD-based v and the MBD-based signed v (N2) read from this same
-    cache -- a direction's 30 non-trivial pipelines are never re-run per
-    metric.
+    28/09 (evaluation KT Step 0): a stage outside S can never differ between
+    config_a and config_b, so toggling it in a coalition changes nothing --
+    only 2^|S| of the full 5-stage space's 32 coalitions are physically
+    distinct per direction, and cache_ba's coalition T is always the same
+    derived config as cache_ab's coalition S\\(T & S) (verified by hand: the
+    two directions toggle the SAME S-stages, just interpreted as "takes the
+    other's model" from opposite anchors). So the two directions' full
+    32-entry caches (_expand_to_full_cache) are both projections of this one
+    shared, S-scoped pool -- cutting a pair's non-trivial derived pipeline
+    runs from 60 (30 per direction, the old _coalition_series_cache) down to
+    2^|S|-2, shared. T=empty and T=S are free (config_a's/config_b's own
+    already-known results, no new pipeline run).
 
-    Every non-trivial coalition's run is recorded as ExecutionSet.DERIVED,
-    the same content-hash-deduplicated way an original run is (KT §4, N10;
-    O2's reconstructibility requires every execution, including Phase 3's,
-    to be recoverable from the record) -- this requires a reachable
-    Postgres, same as any other recorded run. on_record, if given, is called
-    with each record's id right after it's written (e.g. so a caller can
-    link it to an orchestrated analysis) -- optional, so existing callers
-    that don't need this are unaffected.
+    record=False skips record_provenance/on_record entirely (evaluation use
+    only, e.g. an ensemble run in experiments/ that doesn't need provenance
+    -- production's step_phase3 always passes the default, record=True).
+    on_record, if given and record=True, is called with each record's id
+    right after it's written (e.g. so a caller can link it to an
+    orchestrated analysis) -- unchanged from before.
     """
-    full_set = frozenset(ALL_STAGES)
+    stages_in_s = tuple(sorted(_differing_stages(config_a, config_b)))
+    s = frozenset(stages_in_s)
     cache: dict[frozenset[Stage], pd.Series] = {}
-    for coalition in all_coalitions():
+    for coalition in all_coalitions(stages=stages_in_s):
         if len(coalition) == 0:
-            cache[coalition] = stage_series(result_anchor.outputs, Stage.AC, daylight)
-        elif coalition == full_set:
-            cache[coalition] = stage_series(result_other.outputs, Stage.AC, daylight)
+            cache[coalition] = stage_series(result_a.outputs, Stage.AC, daylight)
+        elif coalition == s:
+            cache[coalition] = stage_series(result_b.outputs, Stage.AC, daylight)
         else:
-            label = f"_derived_{'_'.join(str(int(s)) for s in sorted(coalition))}"
-            derived_config = build_derived_config(config_anchor, config_other, coalition, label)
+            label = f"_derived_{'_'.join(str(int(st)) for st in sorted(coalition))}"
+            derived_config = build_derived_config(config_a, config_b, coalition, label)
             shared = shared_inputs_for(derived_config, shared_cec, shared_adr)
             derived_result = run_pipeline(derived_config, shared, defaults)
-            record_id = record_provenance(derived_config, shared, derived_result, ExecutionSet.DERIVED.value)
-            if on_record is not None:
-                on_record(record_id)
+            if record:
+                record_id = record_provenance(derived_config, shared, derived_result, ExecutionSet.DERIVED.value)
+                if on_record is not None:
+                    on_record(record_id)
             cache[coalition] = stage_series(derived_result.outputs, Stage.AC, daylight)
-    return cache
+    return cache, s
+
+
+def _expand_to_full_cache(
+    shared_cache: dict[frozenset[Stage], pd.Series], s: frozenset[Stage], complement: bool
+) -> dict[frozenset[Stage], pd.Series]:
+    """Full 32-coalition cache for one direction, projected from the shared
+    S-scoped pool -- no new pipeline runs, just dict lookups. complement=False
+    for the A-anchored direction (cache[T] = shared_cache[T & s]);
+    complement=True for the B-anchored direction
+    (cache[T] = shared_cache[s - (T & s)])."""
+    full: dict[frozenset[Stage], pd.Series] = {}
+    for coalition in all_coalitions():
+        key = coalition & s
+        if complement:
+            key = s - key
+        full[coalition] = shared_cache[key]
+    return full
 
 
 def _v_from_cache(cache: dict[frozenset[Stage], pd.Series], metric) -> dict[frozenset[Stage], float]:
@@ -250,11 +278,13 @@ def run_phase3(
     daylight: pd.Series,
     defaults: dict | None = None,
     on_record: Callable[[str], None] | None = None,
+    record: bool = True,
 ) -> Phase3Result | Phase3NotComputable:
     """Phase 3 for one pair. Checks computability before running anything --
     an invalid pair costs zero pipeline runs. on_record, if given, is called
     with every derived run's record id (e.g. so a caller can link it to an
-    orchestrated analysis).
+    orchestrated analysis). record=False skips provenance recording entirely
+    (evaluation use only -- production's step_phase3 never passes this).
     """
     computable, invalid = pair_is_shapley_computable(config_a, config_b)
     if not computable:
@@ -262,12 +292,12 @@ def run_phase3(
 
     defaults = defaults or load_defaults()
 
-    cache_ab = _coalition_series_cache(
-        config_a, result_a, config_b, result_b, shared_cec, shared_adr, defaults, daylight, on_record
+    shared_cache, s = _shared_ac_series_cache(
+        config_a, result_a, config_b, result_b, shared_cec, shared_adr, defaults, daylight,
+        record=record, on_record=on_record,
     )
-    cache_ba = _coalition_series_cache(
-        config_b, result_b, config_a, result_a, shared_cec, shared_adr, defaults, daylight, on_record
-    )
+    cache_ab = _expand_to_full_cache(shared_cache, s, complement=False)
+    cache_ba = _expand_to_full_cache(shared_cache, s, complement=True)
 
     v_ab = _v_from_cache(cache_ab, _rmsd)
     v_ba = _v_from_cache(cache_ba, _rmsd)

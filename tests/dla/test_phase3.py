@@ -224,6 +224,18 @@ def test_run_phase3_real_end_to_end_satisfies_efficiency_and_reports_signed_sens
 def test_run_phase3_records_every_derived_run_as_execution_set_derived():
     """Closes the O2 gap: Phase 3's derived-pipeline runs must be
     reconstructible from the record, same as an original run_pipeline() call.
+
+    28/09 (evaluation KT Step 0): count updated from 60 to 2^|S|-2. Before the
+    dedup fix, every one of the 32-coalition space's 30 non-trivial T's per
+    direction got its own label (built from the FULL 5-stage coalition, not
+    just S), so stages outside S produced byte-identical models under
+    DIFFERENT labels -- and since config.label is itself one of the hashed
+    provenance attributes (provenance/model.py::build_document), those
+    differently-labelled-but-physically-identical configs never deduplicated,
+    giving 60 distinct rows. The fix uses one canonical, S-scoped label per
+    physically distinct config, shared by both directions -- CONFIG_A/
+    CONFIG_B differ at 3 stages (decomposition, transposition, temperature;
+    dc and ac share a model), so 2^3-2 = 6.
     """
     from pvdials.provenance.db import get_connection, run_schema
     from pvdials.types import ExecutionSet
@@ -255,5 +267,43 @@ def test_run_phase3_records_every_derived_run_as_execution_set_derived():
 
     derived_labels = [label for label in labels if label.startswith("_derived_")]
 
-    # 30 non-trivial coalitions per direction x 2 directions = 60 derived runs.
-    assert len(derived_labels) == 60
+    # 2^|S|-2 distinct derived configs, shared across both directions -- see
+    # the docstring above for why this isn't 60 anymore.
+    assert len(derived_labels) == 6
+
+
+@pytest.mark.parametrize(
+    "config_b, expected_s",
+    [
+        (CONFIG_B, 3),  # decomposition, transposition, temperature differ
+        (PipelineConfig("D", "disc", "isotropic", "pvsyst_cell", "pvwatts_dc", "pvwatts"), 2),  # decomposition, temperature
+    ],
+)
+def test_run_phase3_calls_run_pipeline_exactly_2_pow_s_minus_2_times(monkeypatch, config_b, expected_s):
+    """28/09 (evaluation KT Step 0): checks the dedup mechanism directly --
+    the actual number of run_pipeline() calls _shared_ac_series_cache() makes
+    -- rather than only its downstream effect on provenance record counts
+    (test_run_phase3_records_every_derived_run_as_execution_set_derived,
+    above). record=False, so this doesn't need Postgres at all.
+    """
+    shared = _shared()
+    defaults = load_defaults()
+    result_a = run_pipeline(CONFIG_A, shared, defaults)
+    result_b = run_pipeline(config_b, shared, defaults)
+
+    real_run_pipeline = phase3_module.run_pipeline
+    calls = []
+
+    def counting_run_pipeline(*args, **kwargs):
+        calls.append(1)
+        return real_run_pipeline(*args, **kwargs)
+
+    monkeypatch.setattr(phase3_module, "run_pipeline", counting_run_pipeline)
+
+    run_phase3(
+        CONFIG_A, result_a, config_b, result_b,
+        shared_cec=shared, shared_adr=shared,
+        daylight=shared.ctx.daylight, defaults=defaults, record=False,
+    )
+
+    assert len(calls) == 2**expected_s - 2
