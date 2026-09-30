@@ -34,7 +34,7 @@ from pvdials.warning_filter import ChandrupatlaWarningFilter
 
 from experiments.evaluation.baselines import baseline_a_stage, baseline_b_stage, informative_rate_parts
 from experiments.evaluation.chain_population import build_configs, default_hardware, load_cached_labels, sample_chains
-from experiments.evaluation.comparators import argmax_with_ties, attribution_gap, averaged_game, rank_agreement, shapley_values, wilson_interval
+from experiments.evaluation.comparators import argmax_with_ties, attribution_gap, averaged_game, coalition_key, rank_agreement, shapley_values, wilson_interval
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.weather_source import verify_thesis_weather_file
 
@@ -270,8 +270,12 @@ def _differing_stages_from_configs(config_a, config_b):
     return _differing_stages(config_a, config_b)
 
 
-def run_phase3_on_ensemble(all_configs, results_by_label, shared_cec, shared_adr, daylight, defaults, phase1_records):
-    jsonl_path = OUT_DIR / "phase3_results.jsonl"
+def run_phase3_on_ensemble(
+    all_configs, results_by_label, shared_cec, shared_adr, daylight, defaults, phase1_records,
+    jsonl_filename="phase3_results.jsonl", summary_filename="phase3_summary.json",
+    exclusions_filename="phase3_exclusions.json", save_v_tables: bool = False,
+):
+    jsonl_path = OUT_DIR / jsonl_filename
     already_done = set()
     if jsonl_path.exists():
         with open(jsonl_path) as f:
@@ -315,18 +319,18 @@ def run_phase3_on_ensemble(all_configs, results_by_label, shared_cec, shared_adr
                 excluded["pool_invalid"] += 1
                 continue
 
-            out_rec = _phase3_pair_report(pair, differing, result3)
+            out_rec = _phase3_pair_report(pair, differing, result3, save_v_tables=save_v_tables)
             out_f.write(json.dumps(out_rec) + "\n")
             out_f.flush()
             if eligible_count % 50 == 0:
                 log(f"  {eligible_count} eligible pairs processed...")
 
     log(f"Phase 3 done. Eligible processed this run: {eligible_count}. Excluded: {excluded}")
-    (OUT_DIR / "phase3_exclusions.json").write_text(json.dumps(excluded, indent=2))
-    summarize_phase3(jsonl_path)
+    (OUT_DIR / exclusions_filename).write_text(json.dumps(excluded, indent=2))
+    summarize_phase3(jsonl_path, summary_filename)
 
 
-def _phase3_pair_report(pair, differing_stages, result3) -> dict:
+def _phase3_pair_report(pair, differing_stages, result3, save_v_tables: bool = False) -> dict:
     stages = tuple(differing_stages)
     w = averaged_game(result3.v_ab, result3.v_ba)
     singleton = {s: w[frozenset({s})] for s in stages}
@@ -339,7 +343,7 @@ def _phase3_pair_report(pair, differing_stages, result3) -> dict:
     rank_singleton = rank_agreement(phi_final, singleton)
     rank_loo = rank_agreement(phi_final, loo)
 
-    return {
+    record = {
         "pair": list(pair),
         "S": [s.name for s in stages],
         "rmsd_ab": result3.rmsd_ab,
@@ -354,9 +358,25 @@ def _phase3_pair_report(pair, differing_stages, result3) -> dict:
         "rank_agreement_loo": rank_loo,
         "any_phi_final_below_neg_eps": any(v < -1e-9 for v in result3.phi_final.values()),
     }
+    if save_v_tables:
+        # Only the S-subset coalitions (2^|S| of them via the canonical
+        # S-scoped key, per Step 0's dedup finding -- coalitions differing
+        # only outside S give an identical value), minus the 2 trivial ones
+        # (empty and full S) -- exactly 2^|S|-2 entries per direction.
+        s_frozen = frozenset(stages)
+        record["v_ab"] = {
+            coalition_key(c): v for c, v in result3.v_ab.items()
+            if c.issubset(s_frozen) and c != frozenset() and c != s_frozen
+        }
+        record["v_ba"] = {
+            coalition_key(c): v for c, v in result3.v_ba.items()
+            if c.issubset(s_frozen) and c != frozenset() and c != s_frozen
+        }
+        record["w_full"] = w[full]
+    return record
 
 
-def summarize_phase3(jsonl_path: Path) -> None:
+def summarize_phase3(jsonl_path: Path, summary_filename: str = "phase3_summary.json") -> None:
     records = [json.loads(line) for line in open(jsonl_path) if line.strip()]
     if not records:
         log("No eligible Phase 3 records to summarize.")
@@ -403,7 +423,7 @@ def summarize_phase3(jsonl_path: Path) -> None:
         ],
         "share_pairs_with_any_phi_final_below_neg_eps": share_negative_phi,
     }
-    (OUT_DIR / "phase3_summary.json").write_text(json.dumps(summary, indent=2))
+    (OUT_DIR / summary_filename).write_text(json.dumps(summary, indent=2))
     log(f"Phase 3 summary written. n_eligible={len(records)}, "
         f"rank_agreement(s2)={agreement_stats(rank_s2, 'rank_agreement_singleton')['rate']}")
 

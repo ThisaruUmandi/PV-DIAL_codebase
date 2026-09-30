@@ -16,10 +16,18 @@ import math
 from pvdials.types import Stage
 
 
+def coalition_key(coalition: frozenset[Stage]) -> str:
+    """Same format as analysis.py's private _coalition_key(): "EMPTY" for
+    the empty set, else stage names joined by "+" in pipeline order.
+    """
+    ordered = [s.name for s in Stage if s in coalition]
+    return "+".join(ordered) if ordered else "EMPTY"
+
+
 def parse_coalition_key(key: str) -> frozenset[Stage]:
-    """Inverse of analysis.py's private _coalition_key(): "EMPTY" -> empty
-    set, else "DECOMPOSITION+TEMPERATURE" (pipeline stage order) -> the
-    matching frozenset of Stage members.
+    """Inverse of coalition_key() / analysis.py's private _coalition_key():
+    "EMPTY" -> empty set, else "DECOMPOSITION+TEMPERATURE" (pipeline stage
+    order) -> the matching frozenset of Stage members.
     """
     if key == "EMPTY":
         return frozenset()
