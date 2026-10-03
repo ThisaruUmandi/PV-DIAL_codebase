@@ -32,7 +32,8 @@
 /* ---- Page ------------------------------------------------------------------ */
 .stApp { background: var(--pv-page); color: var(--pv-text); font-family: var(--pv-sans); }
 [data-testid="stHtml"] { font-family: var(--pv-sans); }
-[data-testid="stToolbar"] { display: none; }
+/* hide the app menu and Deploy only; the toolbar also holds the button that re-opens the sidebar */
+[data-testid="stMainMenu"], [data-testid="stToolbarActions"], [data-testid="stAppDeployButton"], [data-testid="stStatusWidget"] { display: none; }
 .stApp :is(p, li, label, a, button, input, textarea, select, td, th, summary, [data-testid="stMarkdownContainer"]) {
   font-family: var(--pv-sans);
 }
@@ -80,7 +81,7 @@ div.st-key-lock {
 .pv-stages { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
 .pv-stages .pv-stages-label { color: var(--pv-text-2); margin-right: 4px; }
 .pv-pill { padding: 6px 12px; border-radius: 999px; background: #fff; border: 1px solid var(--pv-border); }
-.pv-arrow { color: #8A8F94; }
+.pv-arrow { color: var(--pv-text-2); }  /* the mock-up's #8A8F94 is only 2.97:1; same arrow, darker */
 .pv-phase-grid { display: grid; grid-template-columns: 96px 1fr; row-gap: 14px; column-gap: 16px; font-size: 14px; line-height: 1.5; margin: 16px 0; }
 .pv-phase { font-family: var(--pv-mono); font-size: 13px; color: var(--pv-teal); font-weight: 500; }
 .pv-soft { padding: 14px 16px; border-radius: 10px; background: var(--pv-fill); font-size: 14px; line-height: 1.5; }
@@ -205,3 +206,55 @@ div.st-key-steps :is([data-testid="stVerticalBlock"], [data-testid="stElementCon
 div.st-key-steps a[data-testid="stPageLink-NavLink"] { flex: 1 1 auto; height: auto; }
 div.st-key-lock a[data-testid="stPageLink-NavLink"] { color: var(--pv-teal); font-weight: 600; text-decoration: underline; justify-content: center; }
 div.st-key-lock a[data-testid="stPageLink-NavLink"] p { color: var(--pv-teal); font-weight: 600; }
+
+/* ---- Tooltips: dark box, light text, and never in the way of the mouse ---------------------------- */
+[data-testid="stTooltipContent"], [data-testid="stTooltipContent"] * {
+  background: transparent; color: #F6F4EF !important; font-family: var(--pv-sans); font-size: 13px; line-height: 1.4;
+}
+[data-testid="stTooltipContent"] { background: var(--pv-text); border-radius: 8px; padding: 8px 12px; max-width: 280px; }
+div[data-overlay-container="true"]:has([data-testid="stTooltipContent"]),
+div[data-overlay-container="true"]:has([data-testid="stTooltipContent"]) * { pointer-events: none; }
+
+/* ---- Sidebar: always visible on a desktop window (as in the mock-ups, which have no hide control) ---- */
+@media (min-width: 769px) {
+  section[data-testid="stSidebar"] { transform: none !important; margin-left: 0 !important; visibility: visible !important; }
+  [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarResizeHandle"],
+  [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+}
+/* On a narrow window Streamlit slides the sidebar over the page; keep its open/close buttons visible */
+@media (max-width: 768px) {
+  header[data-testid="stHeader"] { height: 3.5rem; min-height: 3.5rem; }
+  [data-testid="stExpandSidebarButton"], [data-testid="stSidebarCollapsedControl"] { color: var(--pv-text); opacity: 1; }
+  [data-testid="stExpandSidebarButton"] *, [data-testid="stSidebarCollapsedControl"] * { color: var(--pv-text); opacity: 1; }
+  [data-testid="stSidebarHeader"] { height: auto; min-height: 0; padding: 8px 12px 0; }
+  [data-testid="stSidebarCollapseButton"] * { opacity: 1; }
+  [data-testid="stSidebarCollapseButton"], [data-testid="stSidebarCollapseButton"] button { color: var(--pv-side-text); }
+  [data-testid="stMainBlockContainer"] { padding: 56px 20px 40px; }
+}
+
+/* ---- Sidebar widgets (the temporary preview box): light text on dark, boxes stay readable ------------ */
+section[data-testid="stSidebar"] [data-testid="stExpander"] details, section[data-testid="stSidebar"] [data-testid="stExpander"] summary {
+  background: transparent; color: var(--pv-side-text);
+}
+section[data-testid="stSidebar"] [data-testid="stExpander"] summary:hover { background: rgba(255, 255, 255, 0.06); }
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--pv-side-muted); }
+section[data-testid="stSidebar"] :is(label, label p, [data-testid="stWidgetLabel"] p) { color: var(--pv-side-text); }
+section[data-testid="stSidebar"] [data-testid="stSliderThumbValue"],
+section[data-testid="stSidebar"] [data-testid="stSliderTickBarMin"],
+section[data-testid="stSidebar"] [data-testid="stSliderTickBarMax"] { color: var(--pv-side-text); }
+section[data-testid="stSidebar"] [data-baseweb="input"] { background: #FFFFFF; }
+section[data-testid="stSidebar"] [data-baseweb="input"] input { color: var(--pv-text); -webkit-text-fill-color: var(--pv-text); }
+
+/* ---- Captions on the page ------------------------------------------------------------------------------ */
+.stApp [data-testid="stCaptionContainer"], .stApp [data-testid="stCaptionContainer"] * { color: var(--pv-text-2); }
+section[data-testid="stSidebar"] [data-testid="stCaptionContainer"] * { color: var(--pv-side-muted); }
+
+/* Streamlit sets a faded colour on the label wrapper of a disabled link; make the label follow the link's own colour */
+section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] :is(span, div, p) { color: inherit; }
+/* Streamlit fades captions with opacity as well as colour; colour alone is enough and is the one we checked */
+.stApp [data-testid="stCaptionContainer"] { opacity: 1; }
+
+/* ---- Problem box (the one place a failure is shown) ---------------------------------------------------- */
+.stApp [data-testid="stAlert"] { background: #FBEAE6; border: 1px solid #E3B8B0; border-radius: 10px; }
+.stApp [data-testid="stAlert"], .stApp [data-testid="stAlert"] * { color: #7A1F1A; font-family: var(--pv-sans); }

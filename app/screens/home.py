@@ -12,7 +12,7 @@ _NOT_SHOWN_LEAD = "What it does not show:"
 
 
 def _stages_strip() -> str:
-    pills = '<span class="pv-arrow">→</span>'.join(
+    pills = '<span class="pv-arrow" aria-hidden="true">→</span>'.join(
         f'<span class="pv-pill">{escape(name)}</span>' for name in wording.STAGE_PILLS
     )
     return (

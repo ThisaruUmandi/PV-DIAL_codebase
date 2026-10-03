@@ -72,6 +72,7 @@ def sidebar_status_css(flags: Mapping[str, bool], current: str) -> str:
             link.append("background: #2F6E78; color: #FFFFFF; font-weight: 600")
         if status == "locked":
             link.append("color: #8C979A")
+            rules.append(f"{sel}:hover {{ background: transparent }}")  # a locked link does not react
         if link:
             rules.append(f"{sel} {{ {'; '.join(link)} }}")
             rules.append(f"{sel} p {{ font-weight: inherit }}")
