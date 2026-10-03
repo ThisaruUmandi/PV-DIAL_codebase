@@ -50,6 +50,23 @@ PAIRS = [
     ("sidebar 'Done' word", "#B9C2C4", "#1E2A2E"),
     ("arrow between stage pills", "#5B6168", "#F6F4EF"),
     ("disabled button", "#5F656B", "#EFECE5"),
+    ("field label", "#3E444A", "#FFFFFF"),
+    ("tag: from file / optional / default", "#3E444A", "#F1EEE7"),
+    ("tag: optional / default on white", "#3E444A", "#FFFFFF"),
+    ("tag: required", "#15454E", "#E4EFF0"),
+    ("section one-liner", "#5B6168", "#FFFFFF"),
+    ("message ok, boxed", "#14532D", "#E7F4EC"),
+    ("message ok, on the file strip", "#14532D", "#FBFAF7"),
+    ("message warning, boxed", "#6B4200", "#FFF4DB"),
+    ("message warning, on the file strip", "#6B4200", "#FBFAF7"),
+    ("message cross, boxed", "#8A1C1C", "#FBEAE6"),
+    ("message cross, on the file strip", "#8A1C1C", "#FBFAF7"),
+    ("checklist done", "#14532D", "#F6F4EF"),
+    ("checklist still needed", "#3E444A", "#F6F4EF"),
+    ("drop-zone prompt", "#1F2328", "#FBFAF7"),
+    ("drop-zone prompt on hover", "#1F2328", "#E4EFF0"),
+    ("file hash", "#1F2328", "#FFFFFF"),
+    ("file name in the strip", "#1F2328", "#FBFAF7"),
 ]
 
 
@@ -99,3 +116,13 @@ def test_sidebar_links_carry_no_hover_box_and_headings_no_link_icon():
     assert "help=" not in inspect.getsource(components._nav_link)
     assert "disabled=" not in inspect.getsource(components._nav_link)
     assert '[data-testid="stHeaderActionElements"] { display: none; }' in CSS
+
+
+def test_non_text_boundaries():
+    """WCAG 1.4.11 asks 3:1 for the edge of a control and for focus indicators."""
+    assert contrast("#1F5F6B", "#FFFFFF") >= 3  # focus border of an input
+    assert contrast("#788588", "#FBFAF7") >= 3  # dashed edge of the drop zone
+    # The input border #B9C2C4 on white is the value asked for in the design brief. It is
+    # below 3:1; the focus ring above is what marks the active field. Recorded, not hidden.
+    assert 1.7 < contrast("#B9C2C4", "#FFFFFF") < 1.9
+    assert "border: 1px solid #B9C2C4" in CSS

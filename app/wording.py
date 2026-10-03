@@ -251,6 +251,7 @@ D_FROM_FILE_HELP = "Read from the weather file header."
 D_TILT = "Tilt (°)"
 D_AZIMUTH = "Azimuth (°)"
 D_ALBEDO = "Albedo (default 0.2)"
+D_ALBEDO_LABEL = "Albedo"
 D_GEOMETRY = "Mounting geometry"
 D_CONSTRUCTION = "Construction"
 D_GEOMETRY_NAMES = {"open_rack": "Open rack", "close_mount": "Close mount", "insulated_back": "Insulated back"}
@@ -291,3 +292,57 @@ D_UPLOAD_COLUMNS = (
     "The file is missing the column(s) {names}, so it cannot be used. Upload a file that has GHI, T2m and WS10m."
 )
 D_SETUP_FAILED = "The inputs could not be set up ({detail}). Check the site and hardware values and try again."
+
+# --- Shared field furniture (every page) ------------------------------------------------------
+TAG_FROM_FILE = "from file"
+TAG_REQUIRED = "required"
+TAG_OPTIONAL = "optional"
+TAG_DEFAULT = "default"
+TAG_TITLES = {
+    "file": "Read from the weather file; it cannot be edited here.",
+    "required": "You must fill this in before you can continue.",
+    "optional": "You can leave this empty.",
+    "default": "Pre-filled with a standard value; change it if yours differs.",
+}
+
+# --- Page 1: polish ------------------------------------------------------------------------------
+D_CARD_FILE_SUB = "The hourly weather file for your site. It is checked as soon as it arrives."
+D_CARD_OFFSET_SUB = "Which moment inside each hour the values stand for."
+D_CARD_SITE_SUB = "Where the array is and what it is made of. Used by all three pipelines."
+D_FILE_LABEL = "CSV file"
+D_DROP_TEXT = "Drag a CSV here or click to browse"
+D_DROP_NOTE = "Needs the columns GHI, T2m and WS10m. SP (surface pressure) is optional."
+D_REPLACE_TEXT = "Replace file"
+D_MSG_COLUMNS_OK = "Required columns found (GHI, T2m, WS10m, SP)"
+D_MSG_COLUMNS_NO_SP = "GHI, T2m and WS10m found. SP is not in the file, so pressure is derived from the elevation"
+D_MSG_COLUMNS_BAD = "Missing column(s): {names}"
+D_MSG_TIERS_OK = "Tiers 1–4 passed · {n} warning{s}"
+D_MSG_TIERS_WARN = "Tiers passed with {n} warning{s}; see the details"
+D_MSG_TIERS_BAD = "Not passed · {n} problem{s}; see the details"
+D_MSG_TIERS_WAIT = "Tiers 1–3 passed · tier 4 waits for the site and the time offset"
+D_STRIP_FILE_ROWS = "{rows:,} rows"
+D_CHECKLIST_TITLE = "Before you continue"
+D_CHECKLIST_READY = "Everything is filled in."
+D_CHECK_NAME = "Analysis name"
+D_CHECK_FILE = "Weather file uploaded"
+D_CHECK_TIERS = "File passes the checks"
+D_CHECK_SITE = "Site coordinates"
+D_CHECK_OFFSET = "Time offset"
+D_CHECK_ORIENT = "Tilt, azimuth and albedo"
+D_CHECK_HARDWARE = "Hardware and array size"
+D_WAITS_FOR_FILE = "waits for the file"
+
+# short names for the checklist ("still needed: ...")
+D_STILL_NEEDED = "needs {names}"
+N_NAME = "a value"
+N_LAT = "latitude"
+N_LON = "longitude"
+N_REASON = "a reason"
+N_TILT = "tilt"
+N_AZIMUTH = "azimuth"
+N_ALBEDO = "albedo"
+N_MODULE = "module"
+N_INVERTER = "inverter"
+N_MODULES = "modules per string"
+N_STRINGS = "strings per inverter"
+N_HEIGHT = "module height"

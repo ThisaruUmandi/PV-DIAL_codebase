@@ -86,9 +86,20 @@ def stylesheet() -> str:
     return STYLE_PATH.read_text(encoding="utf-8")
 
 
+def text_variables() -> str:
+    """Words that the stylesheet draws (the drop-zone prompt, the replace-file button) are
+    kept in wording.py like all other text and handed to the stylesheet as CSS variables."""
+    values = {
+        "--pv-drop-text": wording.D_DROP_TEXT,
+        "--pv-replace-text": wording.D_REPLACE_TEXT,
+    }
+    body = "; ".join(f'{name}: "{value}"' for name, value in values.items())
+    return f":root {{ {body} }}"
+
+
 def apply(flags: Mapping[str, bool], current: str) -> None:
     """Inject the stylesheet and this run's sidebar rules (call once per run)."""
-    st.html(f"<style>\n{stylesheet()}\n{sidebar_status_css(flags, current)}\n</style>")
+    st.html(f"<style>\n{stylesheet()}\n{text_variables()}\n{sidebar_status_css(flags, current)}\n</style>")
 
 
 __all__ = ["apply", "sidebar_status_css", "stylesheet", "wording"]

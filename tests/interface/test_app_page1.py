@@ -260,28 +260,40 @@ def _fill_required(at: AppTest) -> AppTest:
     return at.run()
 
 
-def test_empty_page_blocks_continue_and_says_why():
+def test_empty_page_blocks_continue_and_lists_what_is_missing():
     at = _fresh()
     assert not at.exception
     assert [t.value for t in at.title] == ["Data & site"]
-    button = at.button(key="w1_continue")
-    assert button.disabled
+    assert at.button(key="w1_continue").disabled
     text = _text(at)
-    assert wording.D_CONTINUE_BLOCKED in text and wording.D_NEED_FILE in text and wording.D_NEED_NAME in text
+    assert wording.D_CHECKLIST_TITLE in text
+    assert "Analysis name — needs a value" in re.sub(r"\s+", " ", text)
+    assert "Weather file uploaded" in text and wording.D_DROP_NOTE in text
+    # a field's tag is a word beside its label
+    assert "required" in text and "optional" in text and "default" in text
 
 
-def test_uploading_a_file_shows_its_facts_and_sha():
+def test_the_drop_zone_prompt_is_handed_to_the_stylesheet_from_wording():
+    from app import theme
+
+    assert f'--pv-drop-text: "{wording.D_DROP_TEXT}"' in theme.text_variables()
+    assert wording.D_DROP_TEXT == "Drag a CSV here or click to browse"
+    assert 'content: var(--pv-drop-text)' in theme.stylesheet()
+
+
+def test_uploading_a_file_replaces_the_drop_zone_by_a_summary_strip():
     at = _upload(_fresh())
     assert not at.exception
-    text = _text(at)
+    text = re.sub(r"\s+", " ", _text(at))
+    ingest = at.session_state["ingest"]
     assert "sample_pvgis_tmy.csv" in text and "rows" in text and "hourly" in text
-    assert "Required columns (GHI, T2m, WS10m, SP)" in text and "Found" in text
-    assert at.text_input(key=f"w1_sha_{at.session_state['ingest'].sha256[:12]}").value == (
-        at.session_state["ingest"].sha256
-    )
-    assert at.session_state["ingest"].sha256 == services.ingest_upload(SAMPLE.read_bytes(), "x").sha256
-    # site prefilled from the file and locked
+    assert "Required columns found (GHI, T2m, WS10m, SP)" in text
+    assert wording.LABEL_FILE_SHA in text and ingest.sha256 in text
+    assert wording.D_DROP_NOTE not in text  # the drop zone is gone
+    assert ingest.sha256 == services.ingest_upload(SAMPLE.read_bytes(), "x").sha256
+    # site prefilled from the file, locked, and tagged as such
     assert at.number_input(key="w1_latitude").value == 6.944 and at.number_input(key="w1_latitude").disabled
+    assert text.count("from file") >= 3
 
 
 def test_a_file_missing_a_column_shows_the_plain_message_and_keeps_continue_blocked():
@@ -293,9 +305,11 @@ def test_a_file_missing_a_column_shows_the_plain_message_and_keeps_continue_bloc
         "The file is missing the column(s) GHI, so it cannot be used. "
         "Upload a file that has GHI, T2m and WS10m."
     )
-    assert [e.value for e in at.error] == [expected]
+    text = re.sub(r"\s+", " ", _text(at))
+    assert expected in text
+    assert "pv-msg-bad" in " ".join(el.value for el in at.get("html"))  # a cross icon + the words
     assert at.button(key="w1_continue").disabled
-    assert wording.D_NEED_FILE in _text(at)
+    assert wording.D_DROP_NOTE in text  # nothing was accepted, so the drop zone stays
 
 
 @needs_db
@@ -340,7 +354,8 @@ def test_choosing_a_different_offset_needs_a_reason_before_continue():
     at = _fill_required(_upload(_fresh()))
     assert not at.button(key="w1_continue").disabled
     at.radio(key="w1_offset_choice").set_value("hour_start").run()
-    assert at.button(key="w1_continue").disabled and wording.D_NEED_REASON in _text(at)
+    assert at.button(key="w1_continue").disabled
+    assert "Time offset — needs a reason" in re.sub(r"\s+", " ", _text(at))
     at.text_input(key="w1_offset_reason").set_value("file aligns with 0 h").run()
     assert not at.button(key="w1_continue").disabled
 
@@ -355,4 +370,42 @@ def test_page_with_the_thesis_file_shows_the_acceptance_numbers():
     assert "Header (0.5 h) 91 38" in table
     assert "Hour-start (0 h) 0 0" in table
     assert "Hour-centre (0.5 h) 91 38" in table
-    assert "Passed · 0 warnings" in table and "PVGIS TMY · 8,760 rows · hourly" in table
+    assert "Tiers 1–4 passed · 0 warnings" in table and "8,760 rows · hourly · PVGIS TMY" in table
+
+
+# --- the polish: tags, messages, checklist -------------------------------------------------------------
+
+
+def test_every_field_carries_a_word_tag():
+    at = _upload(_fresh())
+    html_all = " ".join(el.value for el in at.get("html"))
+    for kind in ("pv-tag-file", "pv-tag-required", "pv-tag-optional", "pv-tag-default"):
+        assert kind in html_all
+    # tags are words, so they read without colour
+    for word in (wording.TAG_FROM_FILE, wording.TAG_REQUIRED, wording.TAG_OPTIONAL, wording.TAG_DEFAULT):
+        assert f">{word}</span>" in html_all.replace('<span class="pv-icon pv-icon-lock" style="width:12px;height:12px" aria-hidden="true"></span>', "")
+
+
+def test_messages_carry_an_icon_and_words():
+    from app import components
+
+    for kind, glyph in (("ok", "ok"), ("warn", "warn"), ("bad", "bad")):
+        html_text = components.message_html(kind, "words")
+        assert f"pv-icon-{glyph}" in html_text and "<span>words</span>" in html_text
+
+
+def test_checklist_ticks_what_is_done_and_names_what_is_still_needed():
+    ingest = services.ingest_upload(SAMPLE.read_bytes(), "sample.csv")
+    partial = services.checklist(_complete_form(ingest, tilt=None, module_height_m=None), ingest)
+    by_key = {c.key: c for c in partial}
+    assert by_key["name"].done and by_key["file"].done and by_key["tiers"].done and by_key["site"].done
+    assert not by_key["orient"].done and by_key["orient"].needs == ("tilt",)
+    assert not by_key["hardware"].done and by_key["hardware"].needs == ("module height",)
+    complete = services.checklist(_complete_form(ingest), ingest)
+    assert all(c.done for c in complete)
+    # the checklist and the old list of reasons always agree
+    for form in (_complete_form(ingest), _complete_form(ingest, tilt=None), services.Form()):
+        assert (services.blockers(form, ingest) == []) == all(c.done for c in services.checklist(form, ingest))
+    assert [c.key for c in services.checklist(services.Form(), None)] == [
+        "name", "file", "tiers", "site", "offset", "orient", "hardware"
+    ]

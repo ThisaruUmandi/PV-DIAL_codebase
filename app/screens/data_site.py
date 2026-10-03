@@ -168,71 +168,81 @@ def _uploaded() -> None:
 # --- Pieces of the page ------------------------------------------------------------------------------
 
 
-def _tier_lines(ingest: services.Ingest, tier4) -> list[tuple[str, services.ValidationResult]]:
+def _tier_lines(ingest: services.Ingest, tier4) -> list[tuple[int, services.ValidationResult]]:
     tiers = list(ingest.tiers.items())
     if tier4 is not None:
         tiers.append((4, tier4))
     return tiers
 
 
-def _kv(label: str, value: str, strong: bool = True) -> str:
-    weight = "600" if strong else "400"
-    return (
-        f'<div class="pv-kv"><span>{escape(label)}</span>'
-        f'<span style="font-weight:{weight}">{escape(value)}</span></div>'
+def _plural(n: int) -> str:
+    return "" if n == 1 else "s"
+
+
+def _summary_strip(ingest: services.Ingest, form: services.Form) -> None:
+    """After upload the drop zone gives way to this: file name, rows, what the checks said, SHA."""
+    step = wording.D_STEP_HOURLY if ingest.hourly else wording.D_STEP_OTHER
+    meta = " · ".join(
+        (wording.D_STRIP_FILE_ROWS.format(rows=ingest.rows), step, ingest.source_label)
+    )
+
+    missing = [c for c in services.REQUIRED_COLUMNS if ingest.columns.get(c) is None]
+    if missing:
+        columns = components.message_html("bad", wording.D_MSG_COLUMNS_BAD.format(names=services._display_names(missing)), False)
+    elif ingest.columns.get("pressure") is None:
+        columns = components.message_html("warn", wording.D_MSG_COLUMNS_NO_SP, False)
+    else:
+        columns = components.message_html("ok", wording.D_MSG_COLUMNS_OK, False)
+
+    tier4 = services.tier4_result(ingest, form)
+    passed, problems, warnings = services.tier_summary(dict(_tier_lines(ingest, tier4)))
+    if not passed:
+        tiers = components.message_html("bad", wording.D_MSG_TIERS_BAD.format(n=problems, s=_plural(problems)), False)
+    elif warnings:
+        tiers = components.message_html("warn", wording.D_MSG_TIERS_WARN.format(n=warnings, s=_plural(warnings)), False)
+    elif tier4 is None:
+        tiers = components.message_html("ok", wording.D_MSG_TIERS_WAIT, False)
+    else:
+        tiers = components.message_html("ok", wording.D_MSG_TIERS_OK.format(n=0, s="s"), False)
+
+    st.html(
+        '<div class="pv-filestrip">'
+        f'<div class="pv-filestrip-head">{components.icon("file", 20)}<div>'
+        f'<div class="pv-filestrip-name">{escape(ingest.name)}</div>'
+        f'<div class="pv-muted">{escape(meta)}</div></div></div>'
+        f"{columns}{tiers}"
+        f'<div class="pv-sha"><span class="pv-sha-label" title="{escape(wording.HELP_FILE_SHA)}">'
+        f"{escape(wording.LABEL_FILE_SHA)}</span><code>{escape(ingest.sha256)}</code></div></div>"
     )
 
 
 def _file_card(ss, ingest, form) -> None:
-    st.html(f'<h2 class="pv-card-title">{escape(wording.D_CARD_FILE)}</h2>')
+    components.card_title(wording.D_CARD_FILE, wording.D_CARD_FILE_SUB)
+    components.field_label(wording.D_NAME_LABEL, "required", hint=wording.D_NAME_HELP)
     st.text_input(
-        wording.D_NAME_LABEL, key=_key("name"), help=wording.D_NAME_HELP,
-        on_change=_edited, args=("name",), placeholder=wording.D_REQUIRED,
+        wording.D_NAME_LABEL, key=_key("name"), label_visibility="collapsed",
+        on_change=_edited, args=("name",),
     )
+    components.field_label(wording.D_FILE_LABEL, "required")
     if ss.get("upload_problem"):
-        components.show_problem(ss["upload_problem"])
+        components.message("bad", ss["upload_problem"])
 
-    label = wording.D_REPLACE_FILE if ingest is not None else wording.D_UPLOAD_LABEL
-    if ingest is not None:
-        step = wording.D_STEP_HOURLY if ingest.hourly else wording.D_STEP_OTHER
-        meta = wording.D_FILE_META.format(source=ingest.source_label, rows=ingest.rows, step=step)
-        st.html(
-            '<div class="pv-filebox"><div>'
-            f'<div style="font-weight:600">{escape(ingest.name)}</div>'
-            f'<div class="pv-muted">{escape(meta)}</div></div></div>'
-        )
-    st.file_uploader(
-        label, type=["csv"], key=f"w1_upload_{ss['upload_n']}", on_change=_uploaded,
-        help=wording.D_UPLOAD_HELP,
-    )
     if ingest is None:
+        with st.container(key="drop"):
+            st.file_uploader(
+                wording.D_UPLOAD_LABEL, type=["csv"], key=f"w1_upload_{ss['upload_n']}", on_change=_uploaded,
+                label_visibility="collapsed",
+            )
+        st.html(f'<p class="pv-note-line">{escape(wording.D_DROP_NOTE)}</p>')
         return
 
-    # required columns
-    missing = [c for c in services.REQUIRED_COLUMNS if ingest.columns.get(c) is None]
-    if missing:
-        columns_text = wording.D_COLUMNS_MISSING.format(names=services._display_names(missing))
-    elif ingest.columns.get("pressure") is None:
-        columns_text = wording.D_COLUMNS_FOUND_NO_SP
-    else:
-        columns_text = wording.D_COLUMNS_FOUND
-    st.html(_kv(wording.D_COLUMNS_LABEL, columns_text))
-
-    # validation tiers 1-4
+    _summary_strip(ingest, form)
+    with st.container(key="replace"):
+        st.file_uploader(
+            wording.D_REPLACE_FILE, type=["csv"], key=f"w1_upload_{ss['upload_n']}", on_change=_uploaded,
+            label_visibility="collapsed",
+        )
     tier4 = services.tier4_result(ingest, form)
-    passed, problems, warnings = services.tier_summary(dict(_tier_lines(ingest, tier4)))
-    if not passed:
-        tiers_text = wording.D_TIERS_FAILED.format(n=problems, s="" if problems == 1 else "s")
-    elif tier4 is None:
-        tiers_text = wording.D_TIERS_WAITING.format(state="passed" if warnings == 0 else f"passed · {warnings} warnings")
-    else:
-        tiers_text = wording.D_TIERS_PASSED.format(n=warnings, s="" if warnings == 1 else "s")
-    st.html(_kv(wording.D_TIERS_LABEL, tiers_text))
-
-    st.text_input(
-        wording.LABEL_FILE_SHA, value=ingest.sha256, disabled=True, help=wording.HELP_FILE_SHA,
-        key=f"w1_sha_{ingest.sha256[:12]}",
-    )
     with st.expander(wording.D_CHECK_DETAILS):
         for number, result in _tier_lines(ingest, tier4):
             st.html(f'<div class="pv-tier-title">{escape(wording.D_TIER_NAMES[number])}</div>')
@@ -244,19 +254,19 @@ def _file_card(ss, ingest, form) -> None:
 
 
 def _offset_card(ss, ingest, form) -> None:
-    st.html(f'<h2 class="pv-card-title">{escape(wording.D_CARD_OFFSET)}</h2>')
+    components.card_title(wording.D_CARD_OFFSET, wording.D_CARD_OFFSET_SUB)
     if ingest is None:
-        st.caption(wording.D_NEED_FILE.capitalize() + ".")
+        components.message("todo", wording.D_NEED_FILE.capitalize() + ".", False)
         return
     header = ingest.header_offset
     absent = header is None or header.source == "assumed_absent_from_header"
     intro = wording.D_OFFSET_INTRO_ABSENT if absent else wording.D_OFFSET_INTRO.format(value=header.value_h)
-    st.html(f'<p class="pv-muted" style="margin:0">{escape(intro)}</p>')
+    st.html(f'<p class="pv-muted pv-tight" style="margin:0">{escape(intro)}</p>')
 
     labels = services.offset_labels(ingest)
     counts = services.offset_counts(ingest, form)
     if counts is None:
-        st.caption(wording.D_OFFSET_NEEDS_SITE)
+        components.message("todo", wording.D_OFFSET_NEEDS_SITE, False)
     else:
         by_label = {c.label: c for c in counts}
         head = "".join(f'<div class="pv-th">{escape(h)}</div>' for h in wording.D_OFFSET_COLS)
@@ -271,80 +281,96 @@ def _offset_card(ss, ingest, form) -> None:
             )
         st.html(f'<div class="pv-offset-table">{head}{rows}</div>')
 
+    components.field_label(wording.D_OFFSET_CHOICE, "default" if form.offset_choice == "header" else None,
+                           hint=wording.HELP_OFFSET)
     st.radio(
         wording.D_OFFSET_CHOICE, services.OFFSET_CHOICES, format_func=labels.get, key=_key("offset_choice"),
-        horizontal=True, help=wording.HELP_OFFSET, on_change=_edited, args=("offset_choice",),
+        horizontal=True, label_visibility="collapsed", on_change=_edited, args=("offset_choice",),
+    )
+    needs_reason = form.offset_choice != "header"
+    components.field_label(
+        wording.D_OFFSET_REASON, "required" if needs_reason else "optional", hint=wording.D_OFFSET_REASON_HELP
     )
     st.text_input(
-        wording.D_OFFSET_REASON, key=_key("offset_reason"), help=wording.D_OFFSET_REASON_HELP,
+        wording.D_OFFSET_REASON, key=_key("offset_reason"), label_visibility="collapsed",
         on_change=_edited, args=("offset_reason",),
-        placeholder=wording.D_REQUIRED if form.offset_choice != "header" else "",
     )
 
 
-def _number(ss, field: str, label: str, locked: bool = False, help: str | None = None, **kwargs) -> None:
+def _number(
+    field: str, label: str, tag: str | None, locked: bool = False, hint: str | None = None,
+    stacked: bool = True, **kwargs,
+) -> None:
+    components.field_label(label, tag, hint, stacked=stacked)
     st.number_input(
-        label, key=_key(field), value=None, placeholder=wording.D_REQUIRED, disabled=locked,
-        on_change=_edited, args=(field,), help=help, **kwargs,
+        label, key=_key(field), value=None, disabled=locked, label_visibility="collapsed",
+        on_change=_edited, args=(field,), **kwargs,
     )
 
 
 def _site_card(ss, ingest) -> None:
-    st.html(
-        f'<h2 class="pv-card-title">{escape(wording.D_CARD_SITE)}</h2>'
-        f'<p class="pv-muted" style="margin:0">{escape(wording.D_SITE_SUB)}</p>'
-    )
+    components.card_title(wording.D_CARD_SITE, wording.D_CARD_SITE_SUB)
     found = ingest.site_found if ingest is not None else {}
     c1, c2, c3 = st.columns(3)
-    for column, field, label, bounds in (
-        (c1, "latitude", wording.D_LAT, (-90.0, 90.0)),
-        (c2, "longitude", wording.D_LON, (-180.0, 180.0)),
-        (c3, "elevation", wording.D_ELEV, (-500.0, 9000.0)),
+    for column, field, label, bounds, optional in (
+        (c1, "latitude", wording.D_LAT, (-90.0, 90.0), False),
+        (c2, "longitude", wording.D_LON, (-180.0, 180.0), False),
+        (c3, "elevation", wording.D_ELEV, (-500.0, 9000.0), True),
     ):
         from_file = field in found
         with column:
             _number(
-                ss, field, f"{label} · {wording.D_FROM_FILE}" if from_file else label,
-                from_file, help=wording.D_FROM_FILE_HELP if from_file else None,
+                field, label, "file" if from_file else ("optional" if optional else "required"), from_file,
+                hint=wording.D_FROM_FILE_HELP if from_file else None,
                 min_value=bounds[0], max_value=bounds[1], format="%g",
             )
     c1, c2, c3 = st.columns(3)
     with c1:
-        _number(ss, "tilt", wording.D_TILT, min_value=0.0, max_value=90.0, format="%g")
+        _number("tilt", wording.D_TILT, "required", min_value=0.0, max_value=90.0, format="%g")
     with c2:
-        _number(ss, "azimuth", wording.D_AZIMUTH, min_value=0.0, max_value=360.0, format="%g")
+        _number("azimuth", wording.D_AZIMUTH, "required", min_value=0.0, max_value=360.0, format="%g")
     with c3:
+        components.field_label(
+            wording.D_ALBEDO_LABEL, "default" if ss[_key("albedo")] == DEFAULT_ALBEDO else None, stacked=True
+        )
         st.number_input(
-            wording.D_ALBEDO, key=_key("albedo"), min_value=0.0, max_value=1.0, format="%g", step=0.05,
-            on_change=_edited, args=("albedo",),
+            wording.D_ALBEDO_LABEL, key=_key("albedo"), min_value=0.0, max_value=1.0, format="%g", step=0.05,
+            label_visibility="collapsed", on_change=_edited, args=("albedo",),
         )
     c1, c2 = st.columns(2)
     with c1:
+        components.field_label(wording.D_GEOMETRY, "default" if ss[_key("geometry")] == DEFAULT_GEOMETRY else None)
         st.selectbox(
             wording.D_GEOMETRY, list(wording.D_GEOMETRY_NAMES), key=_key("geometry"),
-            format_func=wording.D_GEOMETRY_NAMES.get, on_change=_edited, args=("geometry",),
+            format_func=wording.D_GEOMETRY_NAMES.get, label_visibility="collapsed", on_change=_edited,
+            args=("geometry",),
         )
     with c2:
+        components.field_label(
+            wording.D_CONSTRUCTION, "default" if ss[_key("construction")] == DEFAULT_CONSTRUCTION else None
+        )
         st.selectbox(
             wording.D_CONSTRUCTION, list(wording.D_CONSTRUCTION_NAMES), key=_key("construction"),
-            format_func=wording.D_CONSTRUCTION_NAMES.get, on_change=_edited,
+            format_func=wording.D_CONSTRUCTION_NAMES.get, label_visibility="collapsed", on_change=_edited,
             args=("construction",),
         )
+    components.field_label(wording.D_MODULE, "default" if ss[_key("module")] == DEFAULT_MODULE else None)
     st.selectbox(
-        wording.D_MODULE, _module_names(), key=_key("module"),
+        wording.D_MODULE, _module_names(), key=_key("module"), label_visibility="collapsed",
         on_change=_edited, args=("module",),
     )
+    components.field_label(wording.D_INVERTER, "default" if ss[_key("inverter")] == DEFAULT_INVERTER else None)
     st.selectbox(
-        wording.D_INVERTER, _inverter_names(), key=_key("inverter"),
+        wording.D_INVERTER, _inverter_names(), key=_key("inverter"), label_visibility="collapsed",
         on_change=_edited, args=("inverter",),
     )
     c1, c2, c3 = st.columns(3)
     with c1:
-        _number(ss, "modules_per_string", wording.D_MODULES_PER_STRING, min_value=1, max_value=1000, step=1)
+        _number("modules_per_string", wording.D_MODULES_PER_STRING, "required", min_value=1, max_value=1000, step=1)
     with c2:
-        _number(ss, "strings_per_inverter", wording.D_STRINGS, min_value=1, max_value=1000, step=1)
+        _number("strings_per_inverter", wording.D_STRINGS, "required", min_value=1, max_value=1000, step=1)
     with c3:
-        _number(ss, "module_height_m", wording.D_MODULE_HEIGHT, min_value=0.0, max_value=100.0, format="%g")
+        _number("module_height_m", wording.D_MODULE_HEIGHT, "required", min_value=0.0, max_value=100.0, format="%g")
 
 
 def _continue(ss, form, ingest) -> None:
@@ -387,12 +413,20 @@ def render() -> None:
     with right, st.container(key="card_site"):
         _site_card(ss, ingest)
 
-    reasons = services.blockers(form, ingest)
+    checks = services.checklist(form, ingest)
+    ready = all(check.done for check in checks)
     with st.container(key="continue_row"):
-        if reasons:
-            items = "".join(f"<li>{escape(r)}</li>" for r in reasons)
-            st.html(f'<div class="pv-blockers"><b>{escape(wording.D_CONTINUE_BLOCKED)}</b><ul>{items}</ul></div>')
-        if st.button(wording.D_CONTINUE, type="primary", disabled=bool(reasons) or pending, key="w1_continue"):
-            _continue(ss, form, ingest)
+        list_col, button_col = st.columns([3, 2])
+        with list_col:
+            components.checklist(
+                [
+                    (c.done, c.label, wording.D_STILL_NEEDED.format(names=", ".join(c.needs)) if c.needs else "")
+                    for c in checks
+                ],
+                wording.D_CHECKLIST_TITLE, wording.D_CHECKLIST_READY,
+            )
+        with button_col:
+            if st.button(wording.D_CONTINUE, type="primary", disabled=not ready or pending, key="w1_continue"):
+                _continue(ss, form, ingest)
 
     ss["w1_prev"] = {_key(f): ss[_key(f)] for f in ALL_FIELDS}

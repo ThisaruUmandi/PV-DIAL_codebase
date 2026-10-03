@@ -86,6 +86,74 @@ def _nav_link(key: str, status: str, flags) -> None:
     st.page_link(PAGES[key], label=gating.page_title(key))
 
 
+# --- Field furniture, shared by every page ------------------------------------------------------
+
+def icon(name: str, size: int = 16) -> str:
+    """A small outline icon, drawn by the stylesheet (inline SVG is removed by Streamlit's
+    HTML clean-up). It always sits beside words, so meaning never rests on colour."""
+    return (
+        f'<span class="pv-icon pv-icon-{name}" style="width:{size}px;height:{size}px" aria-hidden="true"></span>'
+    )
+
+
+_TAGS = {
+    "file": (wording.TAG_FROM_FILE, "lock"),
+    "required": (wording.TAG_REQUIRED, None),
+    "optional": (wording.TAG_OPTIONAL, None),
+    "default": (wording.TAG_DEFAULT, None),
+}
+
+
+def tag_html(kind: str) -> str:
+    """A small tag beside a label: 'from file', 'required', 'optional' or 'default'. The
+    tag is a word, so it reads without colour."""
+    text, glyph = _TAGS[kind]
+    return (
+        f'<span class="pv-tag pv-tag-{kind}" title="{escape(wording.TAG_TITLES[kind])}">'
+        f"{icon(glyph, 12) if glyph else ''}{escape(text)}</span>"
+    )
+
+
+def field_label(text: str, tag: str | None = None, hint: str | None = None, stacked: bool = False) -> None:
+    """The label above a field (14 px, weight 500) with its tag. The widget itself is
+    drawn with a hidden label so screen readers still get the text. stacked puts the tag
+    on its own line (for narrow, three-across rows, so the fields below stay level)."""
+    title = f' title="{escape(hint)}"' if hint else ""
+    css = "pv-label pv-label-stacked" if stacked else "pv-label"
+    st.html(
+        f'<div class="{css}"><span class="pv-label-text"{title}>{escape(text)}</span>'
+        f"{tag_html(tag) if tag else ''}</div>"
+    )
+
+
+def message_html(kind: str, text: str, boxed: bool = True) -> str:
+    """Icon + words: tick (ok), warning (warn), cross (bad). Colour only adds to it."""
+    glyph = {"ok": "ok", "warn": "warn", "bad": "bad", "todo": "todo"}[kind]
+    box = " pv-msg-box" if boxed else ""
+    return f'<div class="pv-msg pv-msg-{kind}{box}">{icon(glyph)}<span>{escape(text)}</span></div>'
+
+
+def message(kind: str, text: str, boxed: bool = True) -> None:
+    st.html(message_html(kind, text, boxed))
+
+
+def card_title(title: str, sub: str | None = None) -> None:
+    """Section title with a one-line explanation under it."""
+    sub_html = f'<p class="pv-card-sub">{escape(sub)}</p>' if sub else ""
+    st.html(f'<h2 class="pv-card-title">{escape(title)}</h2>{sub_html}')
+
+
+def checklist(items: list[tuple[bool, str, str]], heading: str, ready_text: str) -> None:
+    """What is still missing, with ticks. items: (done, label, missing detail)."""
+    rows = []
+    for done, label, detail in items:
+        kind = "ok" if done else "todo"
+        text = label if done or not detail else f"{label} — {detail}"
+        rows.append(f'<li class="pv-check pv-check-{kind}">{icon(kind)}<span>{escape(text)}</span></li>')
+    tail = f'<div class="pv-check-ready">{escape(ready_text)}</div>' if all(i[0] for i in items) else ""
+    st.html(f'<div class="pv-checklist"><b>{escape(heading)}</b><ul>{"".join(rows)}</ul>{tail}</div>')
+
+
 # --- Page furniture -----------------------------------------------------------------
 
 

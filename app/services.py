@@ -198,43 +198,92 @@ def _number_ok(value: float | None, low: float, high: float) -> bool:
     return value is not None and low <= value <= high
 
 
+@dataclass(frozen=True)
+class Check:
+    """One line of the 'before you continue' list. `missing` holds plain-words reasons
+    (empty when done); a line that cannot be judged yet is not done and has none."""
+
+    key: str
+    label: str
+    done: bool
+    missing: tuple[str, ...] = ()
+    needs: tuple[str, ...] = ()  # short names of what is still needed, for the checklist
+
+
+def checklist(form: Form, ingest: Ingest | None) -> list[Check]:
+    """The short list of what Continue needs, each with a tick or what is missing."""
+    name_missing = () if form.name.strip() else (wording.D_NEED_NAME,)
+    checks = [Check("name", wording.D_CHECK_NAME, not name_missing, name_missing, (wording.N_NAME,) * len(name_missing))]
+
+    if ingest is None or not ingest.usable:
+        reason = (ingest.problem if ingest is not None else None) or wording.D_NEED_FILE
+        checks.append(Check("file", wording.D_CHECK_FILE, False, (reason,)))
+        for key, label in (
+            ("tiers", wording.D_CHECK_TIERS), ("site", wording.D_CHECK_SITE),
+            ("offset", wording.D_CHECK_OFFSET), ("orient", wording.D_CHECK_ORIENT),
+            ("hardware", wording.D_CHECK_HARDWARE),
+        ):
+            checks.append(Check(key, label, False))
+        return checks
+
+    checks.append(Check("file", wording.D_CHECK_FILE, True))
+    failed = [wording.D_TIER_NAMES[t] for t, r in ingest.tiers.items() if not r.passed]
+    tiers_missing = (wording.D_NEED_TIERS.format(tiers=", ".join(failed)),) if failed else ()
+    checks.append(Check("tiers", wording.D_CHECK_TIERS, not tiers_missing, tiers_missing))
+
+    site_missing, site_needs = [], []
+    if not _number_ok(form.latitude, -90, 90):
+        site_missing.append(wording.D_NEED_LAT)
+        site_needs.append(wording.N_LAT)
+    if not _number_ok(form.longitude, -180, 180):
+        site_missing.append(wording.D_NEED_LON)
+        site_needs.append(wording.N_LON)
+    checks.append(Check("site", wording.D_CHECK_SITE, not site_missing, tuple(site_missing), tuple(site_needs)))
+
+    offset_missing = ()
+    if form.offset_choice != "header" and not form.offset_reason.strip():
+        offset_missing = (wording.D_NEED_REASON,)
+    checks.append(
+        Check("offset", wording.D_CHECK_OFFSET, not offset_missing, offset_missing, (wording.N_REASON,) * len(offset_missing))
+    )
+
+    orient_missing, orient_needs = [], []
+    if not _number_ok(form.tilt, 0, 90):
+        orient_missing.append(wording.D_NEED_TILT)
+        orient_needs.append(wording.N_TILT)
+    if not _number_ok(form.azimuth, 0, 360):
+        orient_missing.append(wording.D_NEED_AZIMUTH)
+        orient_needs.append(wording.N_AZIMUTH)
+    if not _number_ok(form.albedo, 0, 1):
+        orient_missing.append(wording.D_NEED_ALBEDO)
+        orient_needs.append(wording.N_ALBEDO)
+    checks.append(Check("orient", wording.D_CHECK_ORIENT, not orient_missing, tuple(orient_missing), tuple(orient_needs)))
+
+    hardware_missing, hardware_needs = [], []
+    if not form.module:
+        hardware_missing.append(wording.D_NEED_MODULE)
+        hardware_needs.append(wording.N_MODULE)
+    if not form.inverter:
+        hardware_missing.append(wording.D_NEED_INVERTER)
+        hardware_needs.append(wording.N_INVERTER)
+    if not form.modules_per_string or form.modules_per_string < 1:
+        hardware_missing.append(wording.D_NEED_MODULES)
+        hardware_needs.append(wording.N_MODULES)
+    if not form.strings_per_inverter or form.strings_per_inverter < 1:
+        hardware_missing.append(wording.D_NEED_STRINGS)
+        hardware_needs.append(wording.N_STRINGS)
+    if form.module_height_m is None or form.module_height_m <= 0:
+        hardware_missing.append(wording.D_NEED_HEIGHT)
+        hardware_needs.append(wording.N_HEIGHT)
+    checks.append(
+        Check("hardware", wording.D_CHECK_HARDWARE, not hardware_missing, tuple(hardware_missing), tuple(hardware_needs))
+    )
+    return checks
+
+
 def blockers(form: Form, ingest: Ingest | None, tier4_ready: bool = True) -> list[str]:
     """Plain-words reasons Continue is not available yet; empty when it is."""
-    reasons: list[str] = []
-    if not form.name.strip():
-        reasons.append(wording.D_NEED_NAME)
-    if ingest is None:
-        reasons.append(wording.D_NEED_FILE)
-        return reasons
-    if not ingest.usable:
-        reasons.append(ingest.problem or wording.D_NEED_FILE)
-        return reasons
-    failed = [wording.D_TIER_NAMES[t] for t, r in ingest.tiers.items() if not r.passed]
-    if failed:
-        reasons.append(wording.D_NEED_TIERS.format(tiers=", ".join(failed)))
-    if not _number_ok(form.latitude, -90, 90):
-        reasons.append(wording.D_NEED_LAT)
-    if not _number_ok(form.longitude, -180, 180):
-        reasons.append(wording.D_NEED_LON)
-    if form.offset_choice != "header" and not form.offset_reason.strip():
-        reasons.append(wording.D_NEED_REASON)
-    if not _number_ok(form.tilt, 0, 90):
-        reasons.append(wording.D_NEED_TILT)
-    if not _number_ok(form.azimuth, 0, 360):
-        reasons.append(wording.D_NEED_AZIMUTH)
-    if not _number_ok(form.albedo, 0, 1):
-        reasons.append(wording.D_NEED_ALBEDO)
-    if not form.module:
-        reasons.append(wording.D_NEED_MODULE)
-    if not form.inverter:
-        reasons.append(wording.D_NEED_INVERTER)
-    if not form.modules_per_string or form.modules_per_string < 1:
-        reasons.append(wording.D_NEED_MODULES)
-    if not form.strings_per_inverter or form.strings_per_inverter < 1:
-        reasons.append(wording.D_NEED_STRINGS)
-    if form.module_height_m is None or form.module_height_m <= 0:
-        reasons.append(wording.D_NEED_HEIGHT)
-    return reasons
+    return [reason for check in checklist(form, ingest) for reason in check.missing]
 
 
 def offset_counts(ingest: Ingest, form: Form) -> tuple[OffsetCandidate, ...] | None:
@@ -347,11 +396,13 @@ def plain_failure(exc: Exception) -> str:
 __all__ = [
     "OFFSET_CHOICES",
     "AnalysisError",
+    "Check",
     "Committed",
     "Form",
     "Ingest",
     "blockers",
     "build_config",
+    "checklist",
     "commit_page1",
     "file_sha256",
     "ingest_stored",
