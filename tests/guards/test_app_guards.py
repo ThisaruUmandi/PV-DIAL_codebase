@@ -13,7 +13,7 @@ from ._app_rules import (
     check_run_analysis_not_given_an_existing_id,
     check_st_error_only_in_wrapper,
 )
-from ._scan import ROOT, app_python_files, template_files
+from ._scan import ROOT, app_python_files, stylesheet_files, template_files
 
 
 def _real_py():
@@ -21,7 +21,7 @@ def _real_py():
 
 
 def _real_text():
-    return list(app_python_files()) + list(template_files())
+    return list(app_python_files()) + list(template_files()) + list(stylesheet_files())
 
 
 def _seed(tmp_path, relative: str, text: str):
@@ -76,8 +76,10 @@ def test_single_st_error_in_the_wrapper_file_passes(tmp_path):
 def test_seeded_compensation_word_is_flagged_in_code_and_template(tmp_path, word):
     py = _seed(tmp_path, "app/w.py", f'TEXT = "outcome 3 shows {word} differences"\n')
     tpl = _seed(tmp_path, "app/templates/report.html.j2", f"<p>{word}</p>\n")
+    css = _seed(tmp_path, "app/static/style.css", f'.x::after {{ content: "{word}" }}\n')
     assert check_no_compensation_words([py], tmp_path)
     assert check_no_compensation_words([tpl], tmp_path)
+    assert check_no_compensation_words([css], tmp_path)
 
 
 @pytest.mark.parametrize(

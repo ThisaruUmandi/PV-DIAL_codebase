@@ -12,6 +12,7 @@ SCAN_DIRS = [ROOT / "src", ROOT / "app"]
 APP_DIR = ROOT / "app"
 TEMPLATE_DIR = APP_DIR / "templates"
 TEMPLATE_SUFFIXES = (".j2", ".html")
+STATIC_DIR = APP_DIR / "static"
 
 
 def app_python_files(app_dir: Path = APP_DIR):
@@ -28,11 +29,18 @@ def template_files(template_dir: Path = TEMPLATE_DIR):
                 yield path
 
 
+def stylesheet_files(static_dir: Path = STATIC_DIR):
+    """The interface stylesheet(s): comments and content strings are text the user may read."""
+    if static_dir.exists():
+        yield from sorted(static_dir.rglob("*.css"))
+
+
 def source_files():
     for d in SCAN_DIRS:
         if d.exists():
             yield from d.rglob("*.py")
     yield from template_files()
+    yield from stylesheet_files()
 
 
 def find(pattern: str, allow: str | None = None):

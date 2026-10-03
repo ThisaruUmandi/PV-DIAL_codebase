@@ -24,7 +24,7 @@ STEP_SUMMARIES = {
     2: "One model per stage for A, B and C.",
     3: "Run the pipelines, see their outputs.",
     4: "Phase 1, then Phase 2 and 3.",
-    5: "Swap one model at the flagged stage (optional).",
+    5: "Swap one model at the flagged stage.",
     6: "The whole analysis on one page, to download.",
 }
 HOME_TITLE = "Home"
@@ -111,12 +111,9 @@ HOME_INTRO = (
     "material, and how much each modelling stage contributes to it."
 )
 HOME_SHOWS = (
-    (
-        "Phase 1",
-        "Where. For each pair of pipelines, the first stage whose disagreement passes the threshold τ.",
-    ),
-    ("Phase 2", "How it carries. How that disagreement grows or shrinks through the later stages."),
-    ("Phase 3", "How much. Each stage's share of the final AC disagreement (Shapley attribution)."),
+    ("Phase 1", "Where.", "For each pair of pipelines, the first stage whose disagreement passes the threshold τ."),
+    ("Phase 2", "How it carries.", "How that disagreement grows or shrinks through the later stages."),
+    ("Phase 3", "How much.", "Each stage's share of the final AC disagreement (Shapley attribution)."),
 )
 HOME_NOT_SHOWN = (
     "What it does not show: which pipeline is closer to the real system. There is no measured "
@@ -173,3 +170,20 @@ SAVED_NOTE = "Saved."
 def clears_message(first_step: int) -> str:
     """'This clears steps 3 to 6 of this analysis.' (or step 6 alone)."""
     return CLEARS_STEP_6 if first_step >= 6 else CLEARS_STEPS.format(first=first_step)
+
+# --- Home layout and sidebar chrome (labels from the Main mock-up) -----------------------
+STAGES_COMPARED = "Stages compared"
+STAGE_PILLS = ("Decomposition", "Transposition", "Cell temperature", "DC", "AC")
+HOME_CARD_SHOWS = "What the analysis shows"
+HOME_CARD_BEFORE = "Before you start"
+RECENT_ANALYSES = "Recent analyses"
+VIEW_ALL_PAST = "View all past analyses"
+RECENT_HEADERS = ("Analysis", "Saved", "Phase 1 outcome by pair", "Status", "Action")
+SIX_STEPS = "The six steps"
+OPTIONAL = "optional"
+CURRENT_ANALYSIS = "Current analysis"
+STORE_CONNECTED = "Provenance store: connected"
+STORE_NOT_CONNECTED = "Provenance store: not connected"
+TAU_FOOTER = "τ = {value:g} ({source})"
+PVLIB_FOOTER = "pvlib {version}"
+SAVED_WORK = "Saved work"

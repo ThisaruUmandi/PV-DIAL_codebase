@@ -60,18 +60,29 @@ _STATUS_WORD = {
     "current": wording.STATUS_CURRENT,
     "locked": wording.STATUS_LOCKED,
     "done": wording.STATUS_DONE,
-    "open": wording.STATUS_OPEN,
 }
 
 
-def page_label(page_key: str, status: str) -> str:
-    """Sidebar text. The status is a word, so colour is never the only signal."""
+def status_word(page_key: str, status: str) -> str:
+    """The word shown after a sidebar title: Done, Current or Locked. Open steps
+    show none (as in the mock-ups); Home and Past never show one."""
+    if page_key in ("home", "past") and status != "current":
+        return ""
+    return _STATUS_WORD.get(status, "")
+
+
+def page_title(page_key: str) -> str:
+    """Sidebar title, without number or status (the badge and the word are drawn
+    beside it by the stylesheet)."""
     if page_key == "home":
-        title = wording.HOME_TITLE
-    elif page_key == "past":
-        title = wording.PAST_TITLE
-    else:
-        title = f"{page_key} · {wording.STEP_TITLES[int(page_key)]}"
-    if page_key in ("home", "past"):
-        return title if status != "current" else f"{title} — {wording.STATUS_CURRENT}"
-    return f"{title} — {_STATUS_WORD[status]}"
+        return wording.HOME_TITLE
+    if page_key == "past":
+        return wording.PAST_TITLE
+    return wording.STEP_TITLES[int(page_key)]
+
+
+def page_tooltip(page_key: str, status: str, flags: Mapping[str, bool]) -> str:
+    """Hover text: the status in words, and for a locked step why it is locked."""
+    if status == "locked":
+        return f"{wording.STATUS_LOCKED}. {lock_reason(int(page_key), flags)}"
+    return {"current": wording.STATUS_CURRENT, "done": wording.STATUS_DONE}.get(status, wording.STATUS_OPEN)

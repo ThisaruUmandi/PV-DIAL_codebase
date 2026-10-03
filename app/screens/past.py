@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import streamlit as st
 
-from app import wording
+from app import components, wording
 
 
 def render() -> None:
-    st.caption("Saved work")
+    components.eyebrow(wording.SAVED_WORK)
     st.title(wording.PAST_TITLE)
-    st.info(wording.EMPTY_PAST)
+    components.note(wording.EMPTY_PAST)

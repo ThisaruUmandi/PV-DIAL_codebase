@@ -1,10 +1,19 @@
 """Streamlit AppTest smoke tests (no browser). The database is pvdials_test."""
 
+import html
+import re
 from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
 from app import wording
+
+
+def _page_text(at) -> str:
+    """All visible text from st.html blocks, markup removed."""
+    joined = " ".join(el.value for el in at.get("html"))
+    return html.unescape(re.sub(r"<[^>]+>", "", joined))
+
 
 MAIN = str(Path(__file__).resolve().parents[2] / "app" / "main.py")
 
@@ -13,7 +22,12 @@ def test_main_runs_and_shows_home_without_an_exception():
     at = AppTest.from_file(MAIN, default_timeout=30).run()
     assert not at.exception
     assert [t.value for t in at.title] == [wording.HOME_HEADLINE]
-    assert wording.HOME_NOT_SHOWN in [i.value for i in at.info]
+    text = _page_text(at)
+    assert wording.HOME_NOT_SHOWN in text
+    assert wording.EMPTY_PAST in text
+    for pill in wording.STAGE_PILLS:
+        assert pill in text
+    assert wording.SIX_STEPS in text
 
 
 def _locked_screen():
@@ -30,7 +44,8 @@ def test_a_locked_step_shows_its_reason_and_no_content():
     at = AppTest.from_function(_locked_screen, default_timeout=30).run()
     assert not at.exception
     assert [t.value for t in at.title] == ["Run & provenance"]
-    assert [i.value for i in at.info] == [wording.LOCK_REASON[3]]
+    text = _page_text(at)
+    assert wording.LOCKED_HEADING in text and wording.LOCK_REASON[3] in text
     assert wording.PLACEHOLDER not in [m.value for m in at.markdown]
 
 
@@ -56,14 +71,14 @@ def test_changing_an_input_after_a_run_warns_and_cancel_keeps_everything():
     assert _name_and_run(at) == "NAME=|RUN=True"
 
     at.sidebar.text_input[0].set_value("renamed").run()
-    assert [w.value for w in at.warning] == ["This clears steps 2 to 6 of this analysis."]
+    assert "This clears steps 2 to 6 of this analysis." in _page_text(at)
     assert _name_and_run(at) == "NAME=|RUN=True"  # not applied yet
 
     at.button(key="pending_cancel").click().run()
-    assert not at.warning
+    assert "This clears" not in _page_text(at)
     assert _name_and_run(at) == "NAME=|RUN=True"
     assert at.sidebar.text_input[0].value == ""  # the box is put back
-    assert wording.CANCELLED_NOTE in [i.value for i in at.info]
+    assert wording.CANCELLED_NOTE in _page_text(at)
 
 
 def test_confirming_applies_the_change_and_clears_later_steps():
@@ -71,5 +86,5 @@ def test_confirming_applies_the_change_and_clears_later_steps():
     at.sidebar.slider[0].set_value(4).run()
     at.sidebar.text_input[0].set_value("renamed").run()
     at.button(key="pending_confirm").click().run()
-    assert not at.warning
+    assert "This clears" not in _page_text(at)
     assert _name_and_run(at) == "NAME=renamed|RUN=False"

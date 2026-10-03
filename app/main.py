@@ -43,10 +43,11 @@ def main() -> None:
     selected = st.navigation(list(pages.values()), position="hidden")
     current = next(key for key, page in pages.items() if page.title == selected.title)
 
-    components.sidebar(current)
+    connected = store.db_reachable()
+    components.sidebar(current, connected)
     preview_controls.render()
 
-    if not store.db_reachable():
+    if not connected:
         components.show_problem(wording.DB_UNREACHABLE)
         st.stop()
 

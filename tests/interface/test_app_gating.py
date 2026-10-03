@@ -52,12 +52,19 @@ def test_report_is_open_but_never_done():
     assert gating.page_status("6", flags, current="1") == "open"
 
 
-def test_sidebar_labels_carry_a_status_word_not_just_colour():
-    assert gating.page_label("2", "locked") == "2 · Pipeline configuration — Locked"
-    assert gating.page_label("1", "done") == "1 · Data & site — Done"
-    assert gating.page_label("4", "current") == "4 · Analysis — Current"
-    assert gating.page_label("home", "open") == "Home"
-    assert gating.page_label("past", "current") == "Past analyses — Current"
+def test_sidebar_titles_words_and_tooltips():
+    assert gating.page_title("2") == "Pipeline configuration"
+    assert gating.page_title("home") == "Home" and gating.page_title("past") == "Past analyses"
+    flags = _flags(0)
+    # the status is written as a word (not colour alone): shown after the title for done steps,
+    # and always available as the link's hover text
+    assert gating.status_word("1", "done") == "Done"
+    assert gating.status_word("2", "locked") == "Locked"
+    assert gating.status_word("home", "open") == ""
+    assert gating.page_tooltip("2", "locked", flags) == "Locked. " + wording.LOCK_REASON[2]
+    assert gating.page_tooltip("1", "current", flags) == "Current"
+    assert gating.page_tooltip("1", "done", flags) == "Done"
+    assert gating.page_tooltip("1", "open", flags) == "Open"
 
 
 def test_read_only_flag_does_not_change_which_steps_are_open():
