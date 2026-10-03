@@ -73,7 +73,7 @@ NO_ADR_INVERTER_REASON = "needs an ADRInverter entry; the selected inverter isn'
 # the models that need them, so one uniform call fits every candidate — no misfits.
 # Stage 3 fit check, 23/09 (KT §7.2 order): faiman_rad needs IR(h), not in a PVGIS file;
 # generic_linear needs per-installation heat-loss coefficients with no defensible
-# default; prilliman corrects another model's output, not a standalone candidate.
+# default; prilliman adjusts another model's output, not a standalone candidate.
 # fuentes/noct_sam/ross are module-dependent (need NOCT) and sapm_cell is
 # mounting-dependent — both checked per run by stage3_selectable(), not here.
 STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
@@ -108,7 +108,7 @@ STAGE_POOLS: dict[Stage, tuple[CandidateModel, ...]] = {
             "needs heat-loss coefficients fitted per installation; no defensible default",
         ),
         _selectable("noct_sam", _S3),
-        _shown("prilliman", _S3, "corrects another model's output; not a standalone temperature model"),
+        _shown("prilliman", _S3, "adjusts another model's output; not a standalone temperature model"),
         _selectable("pvsyst_cell", _S3),
         _selectable("ross", _S3),
         _selectable("sapm_cell", _S3),

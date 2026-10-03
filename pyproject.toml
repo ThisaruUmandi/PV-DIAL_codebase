@@ -14,6 +14,7 @@ dependencies = [
     "scipy",
     "pyyaml",
     "streamlit",
+    "altair",
     "plotly",
     "psycopg[binary]",
     "python-dotenv",

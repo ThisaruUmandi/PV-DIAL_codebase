@@ -9,10 +9,30 @@ ROOT = Path(__file__).resolve().parents[2]
 SCAN_DIRS = [ROOT / "src", ROOT / "app"]
 
 
+APP_DIR = ROOT / "app"
+TEMPLATE_DIR = APP_DIR / "templates"
+TEMPLATE_SUFFIXES = (".j2", ".html")
+
+
+def app_python_files(app_dir: Path = APP_DIR):
+    """Every .py file under app/."""
+    if app_dir.exists():
+        yield from sorted(app_dir.rglob("*.py"))
+
+
+def template_files(template_dir: Path = TEMPLATE_DIR):
+    """The report template(s): text the user reads, so the vocabulary guard covers it."""
+    if template_dir.exists():
+        for path in sorted(template_dir.rglob("*")):
+            if path.is_file() and path.suffix in TEMPLATE_SUFFIXES:
+                yield path
+
+
 def source_files():
     for d in SCAN_DIRS:
         if d.exists():
             yield from d.rglob("*.py")
+    yield from template_files()
 
 
 def find(pattern: str, allow: str | None = None):

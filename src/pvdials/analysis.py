@@ -18,7 +18,7 @@ problems, an outcome-1 pair); run_analysis() is the driver that decides
 whether/when to stop, since an interactive caller (Streamlit) may want to
 show a finding and let a person decide, rather than auto-halting.
 
-N12 gating (decisions.md 13/09, "ordering correction"): outcome 1 -> Phase 2
+N12 gating (decisions.md 13/09, "ordering change"): outcome 1 -> Phase 2
 and Phase 3 do not run for that pair; Phase 3's derived configs are only
 built for outcome 2/3 pairs. dla/phase2.py and dla/phase3.py are unchanged;
 the gating lives here, in what this orchestrator chooses to call.

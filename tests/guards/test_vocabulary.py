@@ -13,10 +13,15 @@ def test_no_error_metric_names():
 
 
 def test_no_error_word():
-    hits = find(r"error", allow=ERROR_ALLOW)
+    # The one allowed use of Streamlit's own st.error is the single wrapper line in
+    # app/components.py; a second use anywhere is caught by test_app_guards.py.
+    hits = [
+        hit for hit in find(r"error", allow=ERROR_ALLOW)
+        if not (hit.startswith("app/components.py:") and "st.error(" in hit)
+    ]
     assert not hits, "'error' is not allowed (disagreement is not error):\n" + "\n".join(hits)
 
 
 def test_no_banned_words():
-    hits = find(r"\b(recommend\w*|suggest\w*|optimal\w*|improv\w*|best|correct)\b")
+    hits = find(r"\b(recommend\w*|suggest\w*|optimal\w*|improv\w*|best|correct\w*)\b")
     assert not hits, "Banned word found:\n" + "\n".join(hits)

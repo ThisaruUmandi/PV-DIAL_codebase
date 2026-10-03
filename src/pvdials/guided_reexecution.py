@@ -149,7 +149,7 @@ class FinalRunResult:
 
 def integrate_watts_series_to_kwh(series: pd.Series) -> float:
     """Integrates a W (or W/m^2) series into kWh (or kWh/m^2) over its FULL,
-    unmasked span (every timestep, including correctly-zero night hours) --
+    unmasked span (every timestep, including legitimately zero night hours) --
     a total needs every hour, or it silently undercounts at partial-daylight
     edges. Each row's duration is the gap to its own next timestamp (handles
     arbitrary-length/irregular uploads); the last row has no next timestamp,

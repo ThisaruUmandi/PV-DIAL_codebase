@@ -1,0 +1,34 @@
+# PV-DIALS look: matches the mock-ups as far as Streamlit's theme allows.
+# Palette (from the mock-ups): cream #F5F3EE, ink #1F2328 (darkened slightly, see textColor), teal #1F5F6B, dark teal #1E2A2E.
+
+[browser]
+gatherUsageStats = false          # also stops the first-run email prompt
+
+[client]
+toolbarMode = "viewer"            # hides the Deploy button and the developer toolbar
+
+[theme]
+base = "light"
+primaryColor = "#1F5F6B"          # buttons, sliders, focus
+backgroundColor = "#F5F3EE"
+secondaryBackgroundColor = "#FFFFFF"   # input boxes
+textColor = "#101417"          # near-black: Streamlit draws captions at 60% of this, which then clears AA
+linkColor = "#1F5F6B"
+borderColor = "#DAD5CB"
+baseRadius = "8px"
+buttonRadius = "8px"
+headingFont = "serif"             # the mock-ups use Fraunces; Streamlit only offers the system serif
+# Info box as in the mock-ups (st.info uses the blue pair)
+blueBackgroundColor = "#E4EFF0"
+blueTextColor = "#15454E"
+# Warning box (the "this clears steps ..." prompt): dark amber on pale amber
+orangeBackgroundColor = "#FBEBD9"
+orangeTextColor = "#7A3E0B"
+
+[theme.sidebar]
+backgroundColor = "#1E2A2E"
+secondaryBackgroundColor = "#2B3B40"
+textColor = "#F2EFE8"
+primaryColor = "#8FC3CB"
+linkColor = "#8FC3CB"
+borderColor = "#34454A"
