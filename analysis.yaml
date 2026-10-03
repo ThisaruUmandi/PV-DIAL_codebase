@@ -1,4 +1,4 @@
-name: colombo_first_run
+name: colombo_thesis_run
 weather_file: data/weather/tmy_6.944_79.856_2005_2020.csv
 time_offset:
   value_h: 0.0
