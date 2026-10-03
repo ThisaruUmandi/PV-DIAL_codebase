@@ -369,6 +369,26 @@ def test_analysis_rejects_a_weather_file_missing_a_required_column(tmp_path):
         run_analysis(_write_yaml(tmp_path, overrides))
 
 
+def test_offset_report_header_row_is_the_files_own_offset_not_the_yaml_value(tmp_path):
+    """28/09 item (a): the "header" row of the offset comparison must show the
+    offset stated in the weather file's header (0.5 h in this fixture), even
+    when the user runs with a different value (0 h here) -- the chosen value
+    must never be relabelled as "the header value".
+    """
+    from pvdials.dla.metrics import resolve_tau
+
+    defaults = load_defaults()
+    config = parse_analysis_yaml(
+        _write_yaml(tmp_path, {"time_offset": {"value_h": 0.0, "reason": "file content aligns with 0 h"}})
+    )
+    assert config.offset_value_h == 0.0
+    load_result = step_load_and_validate(config.weather_file)
+    site_result = step_site_and_offset(load_result, config, defaults, resolve_tau(None, defaults))
+
+    by_label = {c.label: c.value_h for c in site_result.offset_report}
+    assert by_label == {"header": 0.5, "hour_start": 0.0, "hour_centre": 0.5}
+
+
 def test_no_comparison_can_contain_both_sapm_and_single_diode(tmp_path):
     """Verification property #18: step_hardware always loads a CEC-library
     module (load_module(CEC, ...), analysis.py) -- there is no code path in
