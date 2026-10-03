@@ -57,11 +57,33 @@ from pvdials.physics.site import SiteContext, build_site_context
 from pvdials.types import PipelineConfig
 
 REAL_FILE = Path(__file__).resolve().parents[2] / "data" / "weather" / "tmy_6.944_79.856_2005_2020.csv"
+# Same constant as experiments/evaluation/weather_source.py's
+# EXPECTED_SHA256 -- not imported directly, since this script (like the rest
+# of this folder) is run standalone and only its own directory lands on
+# sys.path, not the repo root, so a cross-package import would break that.
+REAL_FILE_SHA256 = "9828d22b6291d0f84d5c6d87331a5487109e3dd436e39f9809eaae03d408ebeb"
 MODULE_NAME = "Canadian_Solar_Inc__CS6K_300MS"
 INVERTER_NAME = "ABB__PVI_6000_OUTD_S_US_A__208V_"
 SAMPLE_PAIR_COUNT = 20_000
 KT_ENSEMBLE_SIZE = 100
 SEED = 0
+
+
+def _verify_real_file() -> None:
+    if not REAL_FILE.exists():
+        raise FileNotFoundError(f"Thesis weather file not found: {REAL_FILE}")
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(REAL_FILE, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    actual = h.hexdigest()
+    if actual != REAL_FILE_SHA256:
+        raise ValueError(
+            f"Thesis weather file content has changed!\n  path: {REAL_FILE}\n"
+            f"  expected sha256: {REAL_FILE_SHA256}\n  actual sha256:   {actual}"
+        )
 
 
 def build_configs(module, mounting) -> list[PipelineConfig]:
@@ -144,6 +166,7 @@ def build_experiment_context() -> ExperimentContext:
     """
     defaults = load_defaults()
 
+    _verify_real_file()
     uploaded = load_uploaded_csv(REAL_FILE)
     weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
     site = detect_site_metadata(uploaded.preamble, uploaded.table)

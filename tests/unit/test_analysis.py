@@ -38,6 +38,10 @@ requires_postgres = pytest.mark.skipif(
 requires_real_file = pytest.mark.skipif(
     not REAL_FILE.exists(), reason=f"Real Colombo file not present at {REAL_FILE}"
 )
+if REAL_FILE.exists():
+    from experiments.evaluation.weather_source import verify_thesis_weather_file
+
+    verify_thesis_weather_file()
 
 
 @pytest.fixture(autouse=True)

@@ -12,3 +12,4 @@ outputs/
 experiments/evaluation/outputs_run1/
 experiments/evaluation/outputs_step4_old/
 step4_myrun.log
+experiments/evaluation/outputs/db_backup/
