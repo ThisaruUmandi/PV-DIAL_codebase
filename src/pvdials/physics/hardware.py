@@ -206,3 +206,13 @@ def load_inverter_database(library: str) -> pd.DataFrame:
     stage5_pool_view()'s inverter_libraries() check), not one named record.
     """
     return pvsystem.retrieve_sam(library)
+
+
+def list_module_names(library: str) -> list[str]:
+    """Every module name in one library, in the database's own order (for a picker)."""
+    return [str(name) for name in pvsystem.retrieve_sam(library).columns]
+
+
+def list_inverter_names(library: str) -> list[str]:
+    """Every inverter name in one library, in the database's own order (for a picker)."""
+    return [str(name) for name in pvsystem.retrieve_sam(library).columns]

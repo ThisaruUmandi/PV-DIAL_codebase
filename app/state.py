@@ -36,6 +36,11 @@ STEP_KEYS: dict[int, tuple[str, ...]] = {
 }
 LAST_STEP = 6
 
+# A step that is done has opened the next one, so changing one of its inputs needs the
+# warning even if nothing later holds a result yet, and its flag is reset: the step has to
+# be confirmed again (Continue) before the next one opens.
+OPENS_NEXT = {1: "data_valid"}
+
 _DEFAULTS: dict[str, Any] = {
     "analysis_id": None,
     "name": "",
@@ -60,6 +65,9 @@ _DEFAULTS: dict[str, Any] = {
     "phase3": None,
     "reexec_session": None,
     "pending": None,
+    "ingest": None,
+    "location": None,
+    "flash": None,
 }
 
 PROGRESS_MAX = 5  # 0 nothing ... 5 re-execution confirmed
@@ -111,6 +119,9 @@ def steps_with_results(ss: MutableMapping) -> list[int]:
 def first_cleared_step(ss: MutableMapping, from_step: int) -> int | None:
     """The first step after from_step that holds something, or None."""
     later = [s for s in steps_with_results(ss) if s > from_step]
+    opener = OPENS_NEXT.get(from_step)
+    if opener and _is_set(ss.get(opener)):
+        later.append(from_step + 1)
     return min(later) if later else None
 
 
@@ -120,6 +131,9 @@ def clear_from(ss: MutableMapping, from_step: int) -> None:
         if step > from_step:
             for key in keys:
                 ss[key] = _DEFAULTS[key]
+    opener = OPENS_NEXT.get(from_step)
+    if opener:
+        ss[opener] = False
 
 
 def set_progress(ss: MutableMapping, level: int) -> None:
@@ -140,8 +154,16 @@ def set_progress(ss: MutableMapping, level: int) -> None:
     ss["reexec_confirmed"] = level >= 5
 
 
+_UNSET = object()
+
+
 def request_change(
-    ss: MutableMapping, key: str, new: Any, widget_key: str | None = None
+    ss: MutableMapping,
+    key: str,
+    new: Any,
+    widget_key: str | None = None,
+    old_widget: Any = _UNSET,
+    reset_uploader: bool = False,
 ) -> bool:
     """Change an input. Returns True if applied now.
 
@@ -155,11 +177,19 @@ def request_change(
         clear_from(ss, from_step)
         ss["pending"] = None
         return True
+    existing = ss.get("pending") or {}
+    # Several fields can change before the user answers: remember the earliest old value of
+    # each, so Cancel puts all of them back.
+    restore = dict(existing.get("restore", {}))
+    if widget_key is not None:
+        restore.setdefault(widget_key, ss.get(key) if old_widget is _UNSET else old_widget)
     ss["pending"] = {
         "key": key,
-        "old": ss.get(key),
+        "old": existing.get("old", ss.get(key)),
         "new": new,
         "widget_key": widget_key,
+        "restore": restore,
+        "reset_uploader": reset_uploader or bool(existing.get("reset_uploader")),
         "first_cleared": first,
         "message": wording.clears_message(first),
     }
@@ -175,14 +205,16 @@ def confirm_pending(ss: MutableMapping) -> None:
     ss["pending"] = None
 
 
-def cancel_pending(ss: MutableMapping) -> None:
-    """Keep everything; put the changed widget back to its old value."""
+def cancel_pending(ss: MutableMapping) -> dict | None:
+    """Keep everything; put every field changed meanwhile back to its old value.
+    Returns the cancelled change (so a caller can also reset a file uploader), or None."""
     pending = ss.get("pending")
     if not pending:
-        return
-    if pending.get("widget_key"):
-        ss[pending["widget_key"]] = pending["old"] if pending["old"] is not None else ""
+        return None
+    for widget_key, old in pending.get("restore", {}).items():
+        ss[widget_key] = old
     ss["pending"] = None
+    return pending
 
 
 def summary_parts(ss: MutableMapping) -> list[tuple[str, str]]:

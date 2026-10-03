@@ -49,6 +49,7 @@ PAIRS = [
     ("sidebar locked link, pointer over it (no fill)", "#8C979A", "#1E2A2E"),
     ("sidebar 'Done' word", "#B9C2C4", "#1E2A2E"),
     ("arrow between stage pills", "#5B6168", "#F6F4EF"),
+    ("disabled button", "#5F656B", "#EFECE5"),
 ]
 
 
@@ -88,3 +89,13 @@ def test_a_locked_sidebar_link_has_no_hover_fill():
     flags = {"data_valid": False}
     css = theme.sidebar_status_css(flags, "home")
     assert 'href$="step2"]:hover { background: transparent }' in css
+
+
+def test_sidebar_links_carry_no_hover_box_and_headings_no_link_icon():
+    import inspect
+
+    from app import components
+
+    assert "help=" not in inspect.getsource(components._nav_link)
+    assert "disabled=" not in inspect.getsource(components._nav_link)
+    assert '[data-testid="stHeaderActionElements"] { display: none; }' in CSS

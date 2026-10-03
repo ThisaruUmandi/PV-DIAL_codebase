@@ -49,42 +49,35 @@ def test_a_locked_step_shows_its_reason_and_no_content():
     assert wording.PLACEHOLDER not in [m.value for m in at.markdown]
 
 
-def _preview_screen():
+def _prompt_screen():
     import streamlit as st
 
     from app import components, state
-    from app.screens import preview_controls
 
     state.init_state(st.session_state)
-    preview_controls.render()
+    if "started" not in st.session_state:
+        st.session_state["started"] = True
+        state.set_progress(st.session_state, 4)
+        st.session_state["w"] = "typed"
+        state.request_change(st.session_state, "name", "renamed", widget_key="w", old_widget="kept")
     components.render_pending_change()
-    st.write(f"NAME={st.session_state['name']}|RUN={st.session_state['run_done']}")
+    st.write(f"RUN={st.session_state['run_done']}|W={st.session_state['w']}|NAME={st.session_state['name']}")
 
 
-def _name_and_run(at) -> str:
-    return next(m.value for m in at.markdown if m.value.startswith("NAME="))
+def _state_line(at) -> str:
+    return next(m.value for m in at.markdown if m.value.startswith("RUN="))
 
 
-def test_changing_an_input_after_a_run_warns_and_cancel_keeps_everything():
-    at = AppTest.from_function(_preview_screen, default_timeout=30).run()
-    at.sidebar.slider[0].set_value(4).run()
-    assert _name_and_run(at) == "NAME=|RUN=True"
-
-    at.sidebar.text_input[0].set_value("renamed").run()
+def test_the_clear_prompt_cancel_restores_the_field_and_keeps_everything():
+    at = AppTest.from_function(_prompt_screen, default_timeout=30).run()
     assert "This clears steps 2 to 6 of this analysis." in _page_text(at)
-    assert _name_and_run(at) == "NAME=|RUN=True"  # not applied yet
-
     at.button(key="pending_cancel").click().run()
-    assert "This clears" not in _page_text(at)
-    assert _name_and_run(at) == "NAME=|RUN=True"
-    assert at.sidebar.text_input[0].value == ""  # the box is put back
-    assert wording.CANCELLED_NOTE in _page_text(at)
+    assert "This clears" not in _page_text(at) and wording.CANCELLED_NOTE in _page_text(at)
+    assert _state_line(at) == "RUN=True|W=kept|NAME="
 
 
-def test_confirming_applies_the_change_and_clears_later_steps():
-    at = AppTest.from_function(_preview_screen, default_timeout=30).run()
-    at.sidebar.slider[0].set_value(4).run()
-    at.sidebar.text_input[0].set_value("renamed").run()
+def test_the_clear_prompt_confirm_applies_the_change_and_clears_later_steps():
+    at = AppTest.from_function(_prompt_screen, default_timeout=30).run()
     at.button(key="pending_confirm").click().run()
     assert "This clears" not in _page_text(at)
-    assert _name_and_run(at) == "NAME=renamed|RUN=False"
+    assert _state_line(at) == "RUN=False|W=typed|NAME=renamed"

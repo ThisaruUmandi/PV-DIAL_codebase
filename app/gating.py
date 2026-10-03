@@ -79,10 +79,3 @@ def page_title(page_key: str) -> str:
     if page_key == "past":
         return wording.PAST_TITLE
     return wording.STEP_TITLES[int(page_key)]
-
-
-def page_tooltip(page_key: str, status: str, flags: Mapping[str, bool]) -> str:
-    """Hover text: the status in words, and for a locked step why it is locked."""
-    if status == "locked":
-        return f"{wording.STATUS_LOCKED}. {lock_reason(int(page_key), flags)}"
-    return {"current": wording.STATUS_CURRENT, "done": wording.STATUS_DONE}.get(status, wording.STATUS_OPEN)

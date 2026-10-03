@@ -171,3 +171,12 @@ def test_inverter_libraries_for_an_unknown_name():
     libraries = inverter_libraries("not_a_real_inverter", CEC_INVERTERS, ADR_INVERTERS)
 
     assert libraries == set()
+
+
+def test_module_and_inverter_name_lists_are_plain_name_lists():
+    from pvdials.physics.hardware import CEC, CEC_INVERTER, list_inverter_names, list_module_names
+
+    modules, inverters = list_module_names(CEC), list_inverter_names(CEC_INVERTER)
+    assert "Canadian_Solar_Inc__CS6K_300MS" in modules and len(modules) > 20_000
+    assert "ABB__PVI_6000_OUTD_S_US_A__208V_" in inverters and len(inverters) > 3_000
+    assert all(isinstance(name, str) for name in modules[:50] + inverters[:50])

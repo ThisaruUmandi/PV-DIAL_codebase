@@ -39,7 +39,7 @@
 }
 .stApp h1 { font-family: var(--pv-serif); font-weight: 600; color: var(--pv-text); letter-spacing: 0; }
 .stApp :is(h2, h3, h4) { font-family: var(--pv-sans); font-weight: 600; color: var(--pv-text); letter-spacing: 0; }
-[data-testid="stMainBlockContainer"] { max-width: none; padding: 40px 44px 56px; }
+[data-testid="stMainBlockContainer"] { max-width: none; padding: 36px 44px 56px; }
 header[data-testid="stHeader"] { background: transparent; height: 0; min-height: 0; }
 .stApp h1 { font-size: 34px; line-height: 1.15; margin: 0; padding: 0; }
 [data-testid="stHeading"] { padding: 0; margin: 0; }
@@ -258,3 +258,59 @@ section[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] :is(span, d
 /* ---- Problem box (the one place a failure is shown) ---------------------------------------------------- */
 .stApp [data-testid="stAlert"] { background: #FBEAE6; border: 1px solid #E3B8B0; border-radius: 10px; }
 .stApp [data-testid="stAlert"], .stApp [data-testid="stAlert"] * { color: #7A1F1A; font-family: var(--pv-sans); }
+
+/* no link icon after headings (the pages are reached from the sidebar, not by heading anchors) */
+[data-testid="stHeaderActionElements"] { display: none; }
+
+/* ---- Step 1 · Data & site (spacing and shapes from the Data mock-up) ---------------------------------- */
+div.st-key-card_file, div.st-key-card_offset, div.st-key-card_site { gap: 14px; }
+.pv-filebox {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px;
+  border: 1px dashed #B9B2A4; border-radius: 10px; background: #FBFAF7;
+}
+.pv-kv { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.pv-tier-title { font-weight: 600; font-size: 13px; margin-top: 6px; }
+.pv-offset-table {
+  display: grid; grid-template-columns: 2fr 1fr 1fr; font-size: 14px; border: 1px solid var(--pv-border-soft);
+  border-radius: 10px; overflow: hidden;
+}
+.pv-offset-table .pv-th { padding: 10px 12px; }
+.pv-td { padding: 6px 12px; min-height: 40px; display: flex; align-items: center; }
+.pv-row-selected { background: var(--pv-teal-light); font-weight: 600; }
+.pv-blockers { font-size: 13px; color: var(--pv-text-2); text-align: right; }
+.pv-blockers ul { margin: 4px 0 0; padding: 0; list-style: none; }
+div.st-key-continue_row { align-items: flex-end; gap: 10px; }
+div.st-key-continue_row .stButton { display: flex; justify-content: flex-end; }
+
+/* form controls: 13px grey labels, 40px boxes, file-sourced values greyed (as in the mock-up) */
+.stApp [data-testid="stWidgetLabel"] p, .stApp [data-testid="stWidgetLabel"] label p { font-size: 13px; color: var(--pv-text-2); }
+.stApp [data-baseweb="input"] input, .stApp [data-baseweb="base-input"] input { height: 40px; font-size: 14px; }
+.stApp [data-baseweb="select"] > div { min-height: 40px; font-size: 14px; }
+.stApp [data-baseweb="input"]:has(input:disabled), .stApp [data-baseweb="base-input"]:has(input:disabled) { background: var(--pv-fill); }
+.stApp input:disabled { -webkit-text-fill-color: var(--pv-text); opacity: 1; color: var(--pv-text); }
+.stApp [data-testid="stNumberInput"] button { display: none; }
+div.st-key-card_file [data-testid="stFileUploaderDropzone"] {
+  border: 1px solid var(--pv-teal); border-radius: 8px; background: #fff; min-height: 44px; padding: 6px 12px;
+}
+div.st-key-card_file [data-testid="stFileUploaderDropzoneInstructions"] { display: none; }
+div.st-key-card_file [data-testid="stFileUploaderDropzone"] button { border-color: var(--pv-teal); color: var(--pv-teal); background: #fff; }
+.stApp [data-testid="stExpander"] { border: 1px solid var(--pv-border-soft); border-radius: 10px; background: #FBFAF7; }
+.stApp [data-testid="stExpander"] summary p { font-size: 14px; font-weight: 600; color: var(--pv-text); }
+.stApp [data-testid="stRadio"] label p { font-size: 14px; color: var(--pv-text); }
+.stApp :is([data-testid="stNumberInputContainer"], [data-testid="stTextInputRootElement"], [data-testid="stSelectbox"] [data-baseweb="select"] > div) {
+  border: 1px solid #C9C3B7; border-radius: 8px; background: #FBFAF7;
+}
+.stApp :is([data-testid="stNumberInputContainer"], [data-testid="stTextInputRootElement"]):has(input:disabled) { background: var(--pv-fill); }
+.stApp :is([data-testid="stNumberInputContainer"], [data-testid="stTextInputRootElement"]):has(input:focus) { border-color: var(--pv-teal); }
+.pv-blockers li, .pv-blockers b { font-size: 13px; line-height: 1.5; font-family: var(--pv-sans); }
+
+/* page heading block: 6px between "Step n of 6" and the title, as in the mock-ups */
+div.st-key-step_head { gap: 6px; }
+div.st-key-home { padding-top: 4px; }
+
+/* a button that cannot be used yet looks it (the Analysis mock-up's disabled style) */
+.stApp [data-testid^="stBaseButton-"]:disabled, .stApp [data-testid^="stBaseButton-"]:disabled:hover {
+  background: #EFECE5; border: 1px solid var(--pv-border); color: #5F656B; cursor: not-allowed;
+}
+.stApp [data-testid^="stBaseButton-"]:disabled p { color: #5F656B; }
+div.st-key-step_head { margin-bottom: 5px; }  /* the mock-up leaves 22px under the title; Streamlit's own gap is 20px and the title box 3px shorter */

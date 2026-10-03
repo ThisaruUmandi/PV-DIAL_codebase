@@ -187,3 +187,107 @@ STORE_NOT_CONNECTED = "Provenance store: not connected"
 TAU_FOOTER = "τ = {value:g} ({source})"
 PVLIB_FOOTER = "pvlib {version}"
 SAVED_WORK = "Saved work"
+
+# --- Page 1 · Data & site ----------------------------------------------------------------------
+D_NAME_LABEL = "Analysis name"
+D_NAME_HELP = "Used to find this analysis again under Past analyses."
+D_CARD_FILE = "Weather file"
+D_UPLOAD_LABEL = "Upload a weather file (CSV)"
+D_UPLOAD_HELP = "An hourly PVGIS TMY file as .csv, with GHI, T2m and WS10m (and SP if you have it)."
+D_REPLACE_FILE = "Replace file"
+D_FILE_META = "{source} · {rows:,} rows · {step}"
+D_SOURCE_PVGIS = "PVGIS TMY"
+D_SOURCE_OTHER = "Weather file"
+D_STEP_HOURLY = "hourly"
+D_STEP_OTHER = "not an hourly series"
+D_COLUMNS_LABEL = "Required columns (GHI, T2m, WS10m, SP)"
+D_COLUMNS_FOUND = "Found"
+D_COLUMNS_FOUND_NO_SP = "Found · SP not in the file; pressure is derived from the elevation"
+D_COLUMNS_MISSING = "Missing: {names}"
+D_TIERS_LABEL = "Validation tiers 1–4"
+D_TIERS_PASSED = "Passed · {n} warning{s}"
+D_TIERS_FAILED = "Not passed · {n} problem{s}"
+D_TIERS_WAITING = "Tiers 1–3: {state} · tier 4 waits for the site and the time offset"
+D_TIER_NAMES = {
+    1: "Tier 1 · structure",
+    2: "Tier 2 · physical ranges",
+    3: "Tier 3 · full-year check",
+    4: "Tier 4 · day and night consistency",
+}
+D_CHECK_DETAILS = "Details of the checks"
+D_NO_FINDINGS = "Nothing to report."
+HELP_FILE_SHA = (
+    "A fingerprint of the exact file you uploaded. The same file always gives the same value, "
+    "so this analysis can be tied to this file."
+)
+D_COLUMN_NAMES = {"ghi": "GHI", "temp_air": "T2m", "wind_speed": "WS10m", "pressure": "SP"}
+
+D_CARD_OFFSET = "Time offset"
+D_OFFSET_INTRO = "The file header states {value:g} h. The counts show how each choice fits the file's own day and night values."
+D_OFFSET_INTRO_ABSENT = "The file header does not state an offset; 0 h is assumed. The counts show how each choice fits the file's own day and night values."
+HELP_OFFSET = (
+    "Each hourly value stands for a moment inside that hour. The offset is how many hours after the "
+    "time stamp that moment is. The counts compare each choice with the file's own day and night "
+    "values: hours with sunlight recorded while the sun is down, and hours with none recorded while "
+    "the sun is up."
+)
+D_OFFSET_HEADER = "Header ({value:g} h)"
+D_OFFSET_HEADER_ABSENT = "Header (not stated, 0 h assumed)"
+D_OFFSET_START = "Hour-start (0 h)"
+D_OFFSET_CENTRE = "Hour-centre (0.5 h)"
+D_OFFSET_COLS = ("Offset", "GHI > 0, sun down", "GHI = 0, sun up")
+D_OFFSET_CHOICE = "Offset used"
+D_OFFSET_REASON = "Reason (recorded in provenance)"
+D_OFFSET_REASON_HELP = "Needed when the offset you use differs from the one the file header states."
+D_OFFSET_NEEDS_SITE = "Enter the latitude and longitude to see the counts."
+
+D_CARD_SITE = "Site & hardware"
+D_SITE_SUB = "Shared by all three pipelines."
+D_LAT = "Latitude"
+D_LON = "Longitude"
+D_ELEV = "Elevation (m)"
+D_FROM_FILE = "file"
+D_FROM_FILE_HELP = "Read from the weather file header."
+D_TILT = "Tilt (°)"
+D_AZIMUTH = "Azimuth (°)"
+D_ALBEDO = "Albedo (default 0.2)"
+D_GEOMETRY = "Mounting geometry"
+D_CONSTRUCTION = "Construction"
+D_GEOMETRY_NAMES = {"open_rack": "Open rack", "close_mount": "Close mount", "insulated_back": "Insulated back"}
+D_CONSTRUCTION_NAMES = {"glass_polymer": "Glass / polymer", "glass_glass": "Glass / glass"}
+D_MODULE = "Module (CECMod)"
+D_INVERTER = "Inverter"
+D_MODULES_PER_STRING = "Modules per string"
+D_STRINGS = "Strings per inverter"
+D_MODULE_HEIGHT = "Module height (m)"
+D_REQUIRED = "required"
+
+D_CONTINUE = "Continue to configuration"
+D_CONTINUE_BLOCKED = "To continue:"
+D_SAVED_FLASH = "Saved. Step 1 is complete."
+
+# Plain-words messages for what blocks Continue (F2.6, F2.7)
+D_NEED_NAME = "give the analysis a name"
+D_NEED_FILE = "upload a weather file"
+D_NEED_COLUMNS = "the file is missing the column(s) {names}; upload a file that has GHI, T2m and WS10m"
+D_NEED_TIERS = "the file did not pass {tiers}; see the details of the checks, fix the file and upload it again"
+D_NEED_LAT = "enter a latitude between −90 and 90"
+D_NEED_LON = "enter a longitude between −180 and 180"
+D_NEED_REASON = "give a reason for using an offset that differs from the file header"
+D_NEED_TILT = "enter the tilt, between 0 and 90 degrees"
+D_NEED_AZIMUTH = "enter the azimuth, between 0 and 360 degrees"
+D_NEED_ALBEDO = "enter an albedo between 0 and 1"
+D_NEED_MODULES = "enter the number of modules per string (a whole number, 1 or more)"
+D_NEED_STRINGS = "enter the number of strings per inverter (a whole number, 1 or more)"
+D_NEED_HEIGHT = "enter the module height in metres (more than 0)"
+D_NEED_MODULE = "choose a module"
+D_NEED_INVERTER = "choose an inverter"
+D_NEED_ELEVATION = "enter an elevation in metres, or leave it empty to use standard pressure"
+
+D_UPLOAD_UNREADABLE = (
+    "That file could not be read as a weather CSV ({detail}). Upload an hourly PVGIS TMY file saved as .csv."
+)
+D_UPLOAD_COLUMNS = (
+    "The file is missing the column(s) {names}, so it cannot be used. Upload a file that has GHI, T2m and WS10m."
+)
+D_SETUP_FAILED = "The inputs could not be set up ({detail}). Check the site and hardware values and try again."

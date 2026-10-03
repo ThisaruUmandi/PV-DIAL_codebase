@@ -81,20 +81,18 @@ def sidebar(current: str, connected: bool = True) -> None:
 
 
 def _nav_link(key: str, status: str, flags) -> None:
-    st.page_link(
-        PAGES[key],
-        label=gating.page_title(key),
-        help=gating.page_tooltip(key, status, flags),
-        disabled=(status == "locked"),
-    )
+    """A locked step is still a link: it opens the lock panel, which says why it is
+    locked. No hover box, so nothing covers the other steps."""
+    st.page_link(PAGES[key], label=gating.page_title(key))
 
 
 # --- Page furniture -----------------------------------------------------------------
 
 
 def step_header(step: int) -> None:
-    eyebrow(wording.STEP_OF.format(n=step))
-    st.title(wording.STEP_TITLES[step])
+    with st.container(key="step_head"):
+        eyebrow(wording.STEP_OF.format(n=step))
+        st.title(wording.STEP_TITLES[step])
 
 
 def summary_strip() -> None:
@@ -125,8 +123,18 @@ def _confirm() -> None:
 
 
 def _cancel() -> None:
-    state.cancel_pending(st.session_state)
+    cancelled = state.cancel_pending(st.session_state)
     st.session_state["cancel_note"] = True
+    if cancelled and cancelled.get("reset_uploader"):
+        # a file picker cannot be set back; a new one takes its place, empty
+        st.session_state["upload_n"] = st.session_state.get("upload_n", 0) + 1
+
+
+def flash() -> None:
+    """A short confirmation after a step is saved (shown once)."""
+    message = st.session_state.pop("flash", None)
+    if message:
+        note(message)
 
 
 def render_pending_change() -> None:

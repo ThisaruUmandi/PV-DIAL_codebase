@@ -15,12 +15,15 @@ if str(ROOT) not in sys.path:
 import streamlit as st
 
 from app import components, state, store, wording
-from app.screens import home, past, preview_controls, step_skeleton
+from app.screens import data_site, home, past, step_skeleton
 
 
 def _step_page(step: int):
     def page() -> None:
-        step_skeleton.render(step)
+        if step == 1:
+            data_site.render()
+        else:
+            step_skeleton.render(step)
 
     page.__name__ = f"step_{step}"
     return page
@@ -45,12 +48,12 @@ def main() -> None:
 
     connected = store.db_reachable()
     components.sidebar(current, connected)
-    preview_controls.render()
 
     if not connected:
         components.show_problem(wording.DB_UNREACHABLE)
         st.stop()
 
+    components.flash()
     components.render_pending_change()
     selected.run()
 

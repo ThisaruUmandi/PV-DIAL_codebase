@@ -42,6 +42,7 @@ from pvdials import report
 from pvdials.config import load_defaults
 from pvdials.data.column_mapper import (
     TAG_USER_ENTERED,
+    SiteMetadata,
     TimeOffset,
     detect_columns,
     detect_site_metadata,
@@ -214,7 +215,12 @@ class SiteStepResult:
 
 
 def step_site_and_offset(
-    load_result: LoadResult, config: AnalysisConfig, defaults: dict, tau: Tau
+    load_result: LoadResult,
+    config: AnalysisConfig,
+    defaults: dict,
+    tau: Tau,
+    offset: TimeOffset | None = None,
+    site: SiteMetadata | None = None,
 ) -> SiteStepResult:
     """Builds the SiteContext from the YAML-given offset (not re-detected --
     the value+reason are a direct input), then runs Tier 4 (which needs the
@@ -226,8 +232,15 @@ def step_site_and_offset(
     site_context entity carries it (verification property #25). Phase 1's
     own per-pair resolve_tau() call is unaffected -- see the comment at
     run_analysis()'s early call.
+
+    offset / site: optional, for a caller (the interface) that has already
+    settled them with the user -- the offset with its true source (the file's
+    own header value is 'file', not 'user_entered') and the site coordinates
+    with any the file lacked entered by the user. Left out (the CLI), the
+    offset is the YAML's and the site is read from the file, as before.
     """
-    site = detect_site_metadata(load_result.uploaded.preamble, load_result.uploaded.table)
+    if site is None:
+        site = detect_site_metadata(load_result.uploaded.preamble, load_result.uploaded.table)
     if not site.is_complete():
         raise AnalysisError(
             f"Step 1 (input data and configuration) failed: weather file has no "
@@ -235,7 +248,8 @@ def step_site_and_offset(
             f"site coordinates."
         )
 
-    offset = TimeOffset(config.offset_value_h, TAG_USER_ENTERED, override_reason=config.offset_reason)
+    if offset is None:
+        offset = TimeOffset(config.offset_value_h, TAG_USER_ENTERED, override_reason=config.offset_reason)
     try:
         ctx = build_site_context(
             load_result.weather, site, offset, defaults, tau=tau.value, tau_source=tau.source
@@ -675,6 +689,66 @@ def build_run_info(
     }
 
 
+def build_inputs_dict(
+    config: AnalysisConfig, tau: Tau, offset_source: str = TAG_USER_ENTERED
+) -> dict[str, Any]:
+    """The `inputs` saved with an analysis, from a parsed AnalysisConfig and the
+    resolved tau. One function for the CLI and the interface, so both save the
+    same shape; weather and location are added once the file has been read."""
+    return {
+        "name": config.name,
+        "weather_file": config.weather_file,
+        "time_offset": {
+            "value_h": config.offset_value_h,
+            "reason": config.offset_reason,
+            "source": offset_source,
+        },
+        "site": {
+            "tilt_deg": config.tilt_deg,
+            "azimuth_deg": config.azimuth_deg,
+            "albedo": config.albedo,
+            "mounting_geometry": config.mounting_geometry,
+            "mounting_construction": config.mounting_construction,
+            "module_height_m": config.module_height_m,
+        },
+        "hardware": {
+            "module_name": config.module_name,
+            "inverter_name": config.inverter_name,
+            "modules_per_string": config.modules_per_string,
+            "strings_per_inverter": config.strings_per_inverter,
+        },
+        "pipelines": config.pipelines,
+        "reexecution": config.reexecution,
+        "tau": {"value": tau.value, "source": tau.source},
+    }
+
+
+def weather_block(
+    weather_file: str, load_result: LoadResult, stored_path: str | None = None
+) -> dict[str, Any]:
+    """The weather file's identity, saved in inputs: name, file SHA-256 and the
+    offset the file's own header states (not the one chosen for the run)."""
+    block: dict[str, Any] = {
+        "name": Path(weather_file).name,
+        "sha256": file_sha256(weather_file),
+        "header_offset_h": detect_time_offset(load_result.uploaded.preamble).value_h,
+    }
+    if stored_path is not None:
+        block["stored_path"] = stored_path
+    return block
+
+
+def location_block(ctx: SiteContext) -> dict[str, Any]:
+    """Latitude, longitude and elevation actually used, with where each came from
+    (file or user), saved in inputs so a saved analysis can be reopened."""
+    return {
+        "latitude": ctx.latitude,
+        "longitude": ctx.longitude,
+        "elevation": ctx.elevation,
+        "sources": dict(ctx.settings["site_sources"]),
+    }
+
+
 # --- Top-level driver: run every step in order, saving after each ------------------
 
 
@@ -722,39 +796,15 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     # step_disagreement_check too, rather than letting the two resolutions
     # drift apart.
     tau = resolve_tau(None, defaults)
-    inputs_dict = {
-        "name": config.name,
-        "weather_file": config.weather_file,
-        "time_offset": {"value_h": config.offset_value_h, "reason": config.offset_reason},
-        "site": {
-            "tilt_deg": config.tilt_deg,
-            "azimuth_deg": config.azimuth_deg,
-            "albedo": config.albedo,
-            "mounting_geometry": config.mounting_geometry,
-            "mounting_construction": config.mounting_construction,
-            "module_height_m": config.module_height_m,
-        },
-        "hardware": {
-            "module_name": config.module_name,
-            "inverter_name": config.inverter_name,
-            "modules_per_string": config.modules_per_string,
-            "strings_per_inverter": config.strings_per_inverter,
-        },
-        "pipelines": config.pipelines,
-        "reexecution": config.reexecution,
-        "tau": {"value": tau.value, "source": tau.source},
-    }
+    inputs_dict = build_inputs_dict(config, tau)
     save_analysis(analysis_id, config.name, "started", inputs_dict)
 
     load_result = step_load_and_validate(config.weather_file)
-    inputs_dict["weather"] = {
-        "name": Path(config.weather_file).name,
-        "sha256": file_sha256(config.weather_file),
-        "header_offset_h": detect_time_offset(load_result.uploaded.preamble).value_h,
-    }
+    inputs_dict["weather"] = weather_block(config.weather_file, load_result)
     save_analysis(analysis_id, config.name, "load_done", inputs_dict)
 
     site_result = step_site_and_offset(load_result, config, defaults, tau)
+    inputs_dict["location"] = location_block(site_result.ctx)
     save_analysis(analysis_id, config.name, "site_done", inputs_dict)
 
     hardware = step_hardware(load_result, site_result, config, defaults)
