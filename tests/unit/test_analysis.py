@@ -26,6 +26,8 @@ from pvdials.provenance.db import get_connection, is_reachable, run_schema
 from pvdials.types import Stage
 from tests.dla.mock_adapters import install_mock_model, install_mock_temperature_model
 
+from experiments.evaluation.db_safety import guard_not_dev_database, resolve_current_database_url
+
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 REAL_FILE = Path("data/weather/tmy_6.944_79.856_2005_2020.csv")
 
@@ -46,6 +48,7 @@ if REAL_FILE.exists():
 
 @pytest.fixture(autouse=True)
 def _clean_schema():
+    guard_not_dev_database(resolve_current_database_url(), "_clean_schema")
     with get_connection() as conn:
         run_schema(conn)
         with conn.cursor() as cur:

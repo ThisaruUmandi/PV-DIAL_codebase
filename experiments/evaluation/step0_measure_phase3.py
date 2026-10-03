@@ -44,6 +44,7 @@ from pvdials.physics.site import build_site_context
 from pvdials.provenance.db import get_connection
 from pvdials.types import ExecutionSet, PipelineConfig
 
+from experiments.evaluation.db_safety import guard_not_dev_database, resolve_current_database_url
 from experiments.evaluation.weather_source import THESIS_WEATHER_FILE, verify_thesis_weather_file
 
 REAL_FILE = THESIS_WEATHER_FILE
@@ -130,6 +131,7 @@ def _derived_record_count() -> int:
 def main() -> None:
     weather_info = verify_thesis_weather_file()
     print(f"Weather file verified: {weather_info}", flush=True)
+    guard_not_dev_database(resolve_current_database_url(), "step0_measure_phase3.py")
     with get_connection() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM stage_output_values")
         cur.execute("DELETE FROM provenance_records")
