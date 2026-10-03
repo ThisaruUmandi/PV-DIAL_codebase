@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS analyses (
     phase2     JSONB,
     phase3     JSONB,
     reexec     JSONB,
-    pipelines  JSONB
+    pipelines  JSONB,
+    run_info   JSONB
 );
 
 -- 28/09: pipelines (per-pipeline descriptive stage-output summaries, report.py)
@@ -45,6 +46,12 @@ CREATE TABLE IF NOT EXISTS analyses (
 -- no-op on a database that already has the table, so an existing database needs
 -- this explicit, idempotent migration too.
 ALTER TABLE analyses ADD COLUMN IF NOT EXISTS pipelines JSONB;
+
+-- 03/10: run_info (checks per pipeline, validation tiers, offset report, start/finish
+-- times, pvlib version) added for the Streamlit interface, so a saved analysis can be
+-- reopened without a live run. Same idempotent pattern as pipelines above; analyses
+-- written before it simply have NULL here.
+ALTER TABLE analyses ADD COLUMN IF NOT EXISTS run_info JSONB;
 
 -- Links an analysis to every provenance_records row it touched. A separate
 -- link table, not a run-id column on provenance_records: that table's id is

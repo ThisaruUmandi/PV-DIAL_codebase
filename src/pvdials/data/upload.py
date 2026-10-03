@@ -8,13 +8,17 @@ plain text. Column mapping to canonical fields happens in column_mapper.py.
 
 from __future__ import annotations
 
+import hashlib
 import io
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pandas as pd
 
+from pvdials.config import ROOT
 from pvdials.data.column_mapper import KNOWN_ALIASES
+
+UPLOADS_DIR = ROOT / "data" / "uploads"
 
 
 class UploadError(Exception):
@@ -86,3 +90,27 @@ def load_uploaded_csv(file_path: str | Path) -> UploadedFile:
         raise UploadError(f"'{path.name}' was read successfully but contains no rows.")
 
     return UploadedFile(name=path.name, table=df, preamble=lines[:header_row])
+
+
+def file_sha256(file_path: str | Path) -> str:
+    """SHA-256 of the file's bytes (the uploaded file itself, not the
+    preprocessed data -- provenance keeps its own hash of the latter)."""
+    digest = hashlib.sha256()
+    with Path(file_path).open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def store_upload(content: bytes, root: str | Path | None = None) -> tuple[Path, str]:
+    """Keep an uploaded file under data/uploads/<sha256>.csv so a saved
+    analysis can be continued, duplicated or re-run later. Content-addressed:
+    storing the same bytes twice writes one file. Returns (path, sha256).
+    """
+    sha = hashlib.sha256(content).hexdigest()
+    folder = Path(root) if root is not None else UPLOADS_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / f"{sha}.csv"
+    if not path.exists():
+        path.write_bytes(content)
+    return path, sha

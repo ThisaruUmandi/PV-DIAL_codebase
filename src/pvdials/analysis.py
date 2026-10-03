@@ -28,8 +28,10 @@ from __future__ import annotations
 
 import json
 import math
+import time
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +48,7 @@ from pvdials.data.column_mapper import (
     detect_time_offset,
 )
 from pvdials.data.preprocess import preprocess
-from pvdials.data.upload import UploadedFile, load_uploaded_csv
+from pvdials.data.upload import UploadedFile, file_sha256, load_uploaded_csv
 from pvdials.data.validate import (
     ValidationResult,
     run_all_validations,
@@ -631,6 +633,48 @@ def reexec_to_dict(result: FinalRunResult | None) -> dict[str, Any] | None:
     }
 
 
+def build_run_info(
+    started_at: str,
+    load_result: LoadResult,
+    site_result: SiteStepResult,
+    pipelines: PipelineRunResult,
+    finished_at: str | None = None,
+    duration_s: float | None = None,
+) -> dict[str, Any]:
+    """The per-run facts that are not results, saved in analyses.run_info:
+    what a reopened analysis needs to show checks, validation and timings
+    without a live run. JSON-safe.
+    """
+    def validation(v: ValidationResult) -> dict[str, Any]:
+        return {
+            "passed": v.passed, "problems": v.problems, "warnings": v.warnings,
+            "notes": v.notes, "counts": v.counts,
+        }
+
+    return {
+        "started_at": started_at,
+        "finished_at": finished_at,
+        "duration_s": duration_s,
+        "pvlib_version": site_result.ctx.settings["pvlib_version"],
+        "load_validation": validation(load_result.validation),
+        "tier4": validation(site_result.tier4),
+        "offset_report": [
+            {
+                "label": c.label, "value_h": c.value_h,
+                "ghi_positive_sun_down": c.ghi_positive_sun_down, "ghi_zero_sun_up": c.ghi_zero_sun_up,
+            }
+            for c in site_result.offset_report
+        ],
+        "checks": {
+            label: {
+                name: {"passed": r.passed, "problems": r.problems}
+                for name, r in per_check.items()
+            }
+            for label, per_check in pipelines.checks.items()
+        },
+    }
+
+
 # --- Top-level driver: run every step in order, saving after each ------------------
 
 
@@ -663,6 +707,8 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
         )
 
     analysis_id = analysis_id or uuid.uuid4().hex
+    started_at = datetime.now(UTC).isoformat()
+    started_clock = time.monotonic()
     config = parse_analysis_yaml(yaml_path)
     defaults = load_defaults()
     # tau is now resolved in two places: here (early, so the SiteContext and
@@ -696,10 +742,16 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
         },
         "pipelines": config.pipelines,
         "reexecution": config.reexecution,
+        "tau": {"value": tau.value, "source": tau.source},
     }
     save_analysis(analysis_id, config.name, "started", inputs_dict)
 
     load_result = step_load_and_validate(config.weather_file)
+    inputs_dict["weather"] = {
+        "name": Path(config.weather_file).name,
+        "sha256": file_sha256(config.weather_file),
+        "header_offset_h": detect_time_offset(load_result.uploaded.preamble).value_h,
+    }
     save_analysis(analysis_id, config.name, "load_done", inputs_dict)
 
     site_result = step_site_and_offset(load_result, config, defaults, tau)
@@ -709,19 +761,24 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     pipelines = step_run_pipelines(config, hardware, defaults, analysis_id)
     stage_summaries = report.build_stage_summaries(pipelines, site_result.ctx.daylight)
     pipelines_dict = report.stage_summaries_to_dict(stage_summaries)
-    save_analysis(analysis_id, config.name, "pipelines_done", inputs_dict, pipelines=pipelines_dict)
+    run_info = build_run_info(started_at, load_result, site_result, pipelines)
+    save_analysis(
+        analysis_id, config.name, "pipelines_done", inputs_dict,
+        pipelines=pipelines_dict, run_info=run_info,
+    )
 
     phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults)
     phase1_dict = {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in phase1_results.items()}
     save_analysis(
-        analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict, pipelines=pipelines_dict
+        analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict, pipelines=pipelines_dict,
+        run_info=run_info,
     )
 
     phase2_result = step_phase2(phase1_results)
     phase2_dict = phase2_to_dict(phase2_result, phase1_results)
     save_analysis(
         analysis_id, config.name, "phase2_done", inputs_dict,
-        phase1=phase1_dict, phase2=phase2_dict, pipelines=pipelines_dict,
+        phase1=phase1_dict, phase2=phase2_dict, pipelines=pipelines_dict, run_info=run_info,
     )
 
     phase3_results = step_phase3(pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id)
@@ -729,16 +786,22 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     save_analysis(
         analysis_id, config.name, "phase3_done", inputs_dict,
         phase1=phase1_dict, phase2=phase2_dict, phase3=phase3_dict, pipelines=pipelines_dict,
+        run_info=run_info,
     )
 
     reexec_result = step_reexecution(
         config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id
     )
     reexec_dict = reexec_to_dict(reexec_result)
+    run_info = build_run_info(
+        started_at, load_result, site_result, pipelines,
+        finished_at=datetime.now(UTC).isoformat(),
+        duration_s=round(time.monotonic() - started_clock, 3),
+    )
     save_analysis(
         analysis_id, config.name, "done", inputs_dict,
         phase1=phase1_dict, phase2=phase2_dict, phase3=phase3_dict, reexec=reexec_dict,
-        pipelines=pipelines_dict,
+        pipelines=pipelines_dict, run_info=run_info,
     )
 
     return AnalysisRunResult(

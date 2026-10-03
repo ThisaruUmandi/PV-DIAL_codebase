@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 import pvdials.analysis as analysis_module
+from experiments.evaluation.db_safety import guard_not_dev_database, resolve_current_database_url
 from pvdials.analysis import (
     NOT_RUN_OUTCOME_1,
     AnalysisError,
@@ -25,8 +26,6 @@ from pvdials.provenance.analyses import load_analysis
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
 from pvdials.types import Stage
 from tests.dla.mock_adapters import install_mock_model, install_mock_temperature_model
-
-from experiments.evaluation.db_safety import guard_not_dev_database, resolve_current_database_url
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 REAL_FILE = Path("data/weather/tmy_6.944_79.856_2005_2020.csv")

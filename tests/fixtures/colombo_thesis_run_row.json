@@ -1,0 +1,1601 @@
+{
+ "id": "10d1e579584d4b96abe005e1dbf91dc1",
+ "name": "colombo_thesis_run",
+ "status": "done",
+ "inputs": {
+  "name": "colombo_thesis_run",
+  "site": {
+   "albedo": null,
+   "tilt_deg": 6.944,
+   "azimuth_deg": 180.0,
+   "module_height_m": 3.0,
+   "mounting_geometry": null,
+   "mounting_construction": null
+  },
+  "hardware": {
+   "module_name": "Canadian_Solar_Inc__CS6K_300MS",
+   "inverter_name": "ABB__PVI_6000_OUTD_S_US_A__208V_",
+   "modules_per_string": 10,
+   "strings_per_inverter": 2
+  },
+  "pipelines": {
+   "A": {
+    "ac": "sandia",
+    "dc": "singlediode_cec",
+    "temperature": "faiman",
+    "decomposition": "erbs",
+    "transposition": "isotropic"
+   },
+   "B": {
+    "ac": "sandia",
+    "dc": "singlediode_desoto",
+    "temperature": "pvsyst_cell",
+    "decomposition": "disc",
+    "transposition": "haydavies"
+   },
+   "C": {
+    "ac": "sandia",
+    "dc": "singlediode_cec",
+    "temperature": "ross",
+    "decomposition": "dirint",
+    "transposition": "perez"
+   }
+  },
+  "reexecution": null,
+  "time_offset": {
+   "reason": "header states 0.5 h; file day/night content aligns with 0 h",
+   "value_h": 0.0
+  },
+  "weather_file": "data/weather/tmy_6.944_79.856_2005_2020.csv"
+ },
+ "phase1": {
+  "A-B": {
+   "k": "DECOMPOSITION",
+   "tau": {
+    "value": 0.093,
+    "source": "default"
+   },
+   "pair": [
+    "A",
+    "B"
+   ],
+   "status": "ran",
+   "metrics": [
+    {
+     "mad": 53.34085683923356,
+     "mbd": 5.935176353417129,
+     "rmsd": 91.7562417561366,
+     "nrmsd": 0.12352268423288157,
+     "stage": "DECOMPOSITION",
+     "n_pooled": 16784,
+     "systematic_share": 0.004184041867061711,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 1.6700105052273078,
+     "mbd": -0.33935418442227255,
+     "rmsd": 3.015664713968535,
+     "nrmsd": 0.0036362365755287724,
+     "stage": "TRANSPOSITION",
+     "n_pooled": 8392,
+     "systematic_share": 0.012663107931989865,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 2.9881613966658236,
+     "mbd": -2.36724768034803,
+     "rmsd": 4.00838798666968,
+     "nrmsd": 0.15343924374462667,
+     "stage": "TEMPERATURE",
+     "n_pooled": 8392,
+     "systematic_share": 0.3487770464385139,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 54.624419314901665,
+     "mbd": 29.79809978941034,
+     "rmsd": 76.97082537130248,
+     "nrmsd": 0.017299976805143703,
+     "stage": "DC",
+     "n_pooled": 8392,
+     "systematic_share": 0.14987350127697613,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 52.47907623214759,
+     "mbd": 28.449686743076057,
+     "rmsd": 73.88334866250688,
+     "nrmsd": 0.01716783414408576,
+     "stage": "AC",
+     "n_pooled": 8392,
+     "systematic_share": 0.14827291833775383,
+     "not_computable_reason": null
+    }
+   ],
+   "outcome": 3,
+   "differing_stages": [
+    "DECOMPOSITION",
+    "TRANSPOSITION",
+    "TEMPERATURE",
+    "DC"
+   ]
+  },
+  "A-C": {
+   "k": "DECOMPOSITION",
+   "tau": {
+    "value": 0.093,
+    "source": "default"
+   },
+   "pair": [
+    "A",
+    "C"
+   ],
+   "status": "ran",
+   "metrics": [
+    {
+     "mad": 46.42606235616039,
+     "mbd": 13.173653254502911,
+     "rmsd": 98.18767422890906,
+     "nrmsd": 0.13963482151755152,
+     "stage": "DECOMPOSITION",
+     "n_pooled": 16784,
+     "systematic_share": 0.018001077854567452,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 3.9888702685027146,
+     "mbd": -1.7045160044274428,
+     "rmsd": 5.429757162408531,
+     "nrmsd": 0.00652833172986294,
+     "stage": "TRANSPOSITION",
+     "n_pooled": 8392,
+     "systematic_share": 0.09854653371920699,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 4.232204105773463,
+     "mbd": -4.048142490305829,
+     "rmsd": 5.541091923843879,
+     "nrmsd": 0.19458907707025488,
+     "stage": "TEMPERATURE",
+     "n_pooled": 8392,
+     "systematic_share": 0.5337290872894142,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 70.1305717606945,
+     "mbd": 43.60131268712184,
+     "rmsd": 99.42903300411703,
+     "nrmsd": 0.02248401184719907,
+     "stage": "DC",
+     "n_pooled": 8392,
+     "systematic_share": 0.19229708361844705,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 67.37220211965324,
+     "mbd": 41.566402446087906,
+     "rmsd": 95.43775138819612,
+     "nrmsd": 0.02230967276602004,
+     "stage": "AC",
+     "n_pooled": 8392,
+     "systematic_share": 0.18969001879199945,
+     "not_computable_reason": null
+    }
+   ],
+   "outcome": 3,
+   "differing_stages": [
+    "DECOMPOSITION",
+    "TRANSPOSITION",
+    "TEMPERATURE"
+   ]
+  },
+  "B-C": {
+   "k": null,
+   "tau": {
+    "value": 0.093,
+    "source": "default"
+   },
+   "pair": [
+    "B",
+    "C"
+   ],
+   "status": "ran",
+   "metrics": [
+    {
+     "mad": 25.78821329426103,
+     "mbd": 7.238476901085787,
+     "rmsd": 44.95626721096893,
+     "nrmsd": 0.06742405364031864,
+     "stage": "DECOMPOSITION",
+     "n_pooled": 16784,
+     "systematic_share": 0.025924709457539774,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 3.140763204641543,
+     "mbd": -1.3651618200051705,
+     "rmsd": 4.21998540953025,
+     "nrmsd": 0.005071586958219852,
+     "stage": "TRANSPOSITION",
+     "n_pooled": 8392,
+     "systematic_share": 0.10465171952355878,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 1.6808948099577996,
+     "mbd": -1.6808948099577996,
+     "rmsd": 1.9879051989752623,
+     "nrmsd": 0.07061370511399394,
+     "stage": "TEMPERATURE",
+     "n_pooled": 8392,
+     "systematic_share": 0.7149731512167876,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 25.300992480783385,
+     "mbd": 13.803212897711507,
+     "rmsd": 34.53077197685119,
+     "nrmsd": 0.007865376505321098,
+     "stage": "DC",
+     "n_pooled": 8392,
+     "systematic_share": 0.15978933808831833,
+     "not_computable_reason": null
+    },
+    {
+     "mad": 24.365182240691578,
+     "mbd": 13.116715703011852,
+     "rmsd": 33.301385964579715,
+     "nrmsd": 0.007840232379094557,
+     "stage": "AC",
+     "n_pooled": 8392,
+     "systematic_share": 0.1551406453669593,
+     "not_computable_reason": null
+    }
+   ],
+   "outcome": 1,
+   "differing_stages": [
+    "DECOMPOSITION",
+    "TRANSPOSITION",
+    "TEMPERATURE",
+    "DC"
+   ]
+  }
+ },
+ "phase2": {
+  "delta": [
+   {
+    "stage": "DECOMPOSITION",
+    "value": 0.11019385313025058
+   },
+   {
+    "stage": "TRANSPOSITION",
+    "value": -0.10511513470904672
+   },
+   {
+    "stage": "TEMPERATURE",
+    "value": 0.13446862355508798
+   },
+   {
+    "stage": "DC",
+    "value": -0.12366422025707055
+   },
+   {
+    "stage": "AC",
+    "value": -0.00011054195615450499
+   }
+  ],
+  "status": "ran",
+  "max_nrmsd": [
+   {
+    "stage": "DECOMPOSITION",
+    "value": 0.13963482151755152
+   },
+   {
+    "stage": "TRANSPOSITION",
+    "value": 0.00652833172986294
+   },
+   {
+    "stage": "TEMPERATURE",
+    "value": 0.19458907707025488
+   },
+   {
+    "stage": "DC",
+    "value": 0.02248401184719907
+   },
+   {
+    "stage": "AC",
+    "value": 0.02230967276602004
+   }
+  ],
+  "mean_nrmsd": [
+   {
+    "stage": "DECOMPOSITION",
+    "value": 0.11019385313025058
+   },
+   {
+    "stage": "TRANSPOSITION",
+    "value": 0.005078718421203855
+   },
+   {
+    "stage": "TEMPERATURE",
+    "value": 0.13954734197629184
+   },
+   {
+    "stage": "DC",
+    "value": 0.01588312171922129
+   },
+   {
+    "stage": "AC",
+    "value": 0.015772579763066785
+   }
+  ],
+  "pair_nrmsd": [
+   {
+    "pair": [
+     "A",
+     "B"
+    ],
+    "nrmsd": [
+     {
+      "stage": "DECOMPOSITION",
+      "value": 0.12352268423288157
+     },
+     {
+      "stage": "TRANSPOSITION",
+      "value": 0.0036362365755287724
+     },
+     {
+      "stage": "TEMPERATURE",
+      "value": 0.15343924374462667
+     },
+     {
+      "stage": "DC",
+      "value": 0.017299976805143703
+     },
+     {
+      "stage": "AC",
+      "value": 0.01716783414408576
+     }
+    ]
+   },
+   {
+    "pair": [
+     "A",
+     "C"
+    ],
+    "nrmsd": [
+     {
+      "stage": "DECOMPOSITION",
+      "value": 0.13963482151755152
+     },
+     {
+      "stage": "TRANSPOSITION",
+      "value": 0.00652833172986294
+     },
+     {
+      "stage": "TEMPERATURE",
+      "value": 0.19458907707025488
+     },
+     {
+      "stage": "DC",
+      "value": 0.02248401184719907
+     },
+     {
+      "stage": "AC",
+      "value": 0.02230967276602004
+     }
+    ]
+   },
+   {
+    "pair": [
+     "B",
+     "C"
+    ],
+    "nrmsd": [
+     {
+      "stage": "DECOMPOSITION",
+      "value": 0.06742405364031864
+     },
+     {
+      "stage": "TRANSPOSITION",
+      "value": 0.005071586958219852
+     },
+     {
+      "stage": "TEMPERATURE",
+      "value": 0.07061370511399394
+     },
+     {
+      "stage": "DC",
+      "value": 0.007865376505321098
+     },
+     {
+      "stage": "AC",
+      "value": 0.007840232379094557
+     }
+    ]
+   }
+  ]
+ },
+ "phase3": {
+  "A-B": {
+   "pair": [
+    "A",
+    "B"
+   ],
+   "v_ab": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 36.10357667775618,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 15.828507940405062,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": 66.3953797317151,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 0.8735061219388562,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 34.66287946594405,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": 74.0418227172586,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 36.06328091945646,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 36.10357667775618,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": 69.37253718474635,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 16.127583219214973,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 15.828507940405062,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": 65.74111959133752,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": 66.3953797317151,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 0.8735061219388562,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": 74.4287135551588,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 34.752199032160284,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 34.66287946594405,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": 73.43388003962818,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 74.0418227172586,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 36.06328091945646,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": 68.80814663191192,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 69.37253718474635,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 16.127583219214973,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 65.74111959133752,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 73.88334866250688,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 74.4287135551588,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 34.752199032160284,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 73.43388003962818,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 68.80814663191192,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 73.88334866250688,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "v_ba": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 34.365888842828305,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 16.913485465713276,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": 66.29558486493217,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 1.0027881415305322,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 34.55790025695308,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": 73.1257475890564,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 34.33874308253904,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 34.365888842828305,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": 69.54753147394732,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 17.193668422779194,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 16.913485465713276,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": 65.85402567587126,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": 66.29558486493217,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 1.0027881415305322,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": 74.2420644699799,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 34.64989493293218,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 34.55790025695308,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": 72.70263820996144,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 73.1257475890564,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 34.33874308253904,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": 69.1909953002079,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 69.54753147394732,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 17.193668422779194,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 65.85402567587126,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 73.88334866250688,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 74.2420644699799,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 34.64989493293218,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 72.70263820996144,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 69.1909953002079,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 73.88334866250688,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "share": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 0.23717855962062986
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 0.08259030963757862
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 0.6799142046081457
+    },
+    {
+     "stage": "DC",
+     "value": 0.00031692613364574826
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "phi_ab": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 18.048373172108494
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 5.647275251627079
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 50.22887278845923
+    },
+    {
+     "stage": "DC",
+     "value": -0.0411725496879316
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "phi_ba": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 16.998719259335843
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 6.5568220345681665
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 50.23980369085011
+    },
+    {
+     "stage": "DC",
+     "value": 0.08800367775274974
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "status": "ran",
+   "rmsd_ab": 73.88334866250688,
+   "signed_v": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 2.498018416563839,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 2.034908327655145,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": -33.80104732111326,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 0.6378263280831694,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 4.603518339387308,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": -31.364385878787868,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 3.1350798720718105,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 2.498018416563839,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": -31.706097967937996,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 2.6747927848393,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 2.034908327655145,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": -33.05160875242942,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": -33.80104732111326,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 0.6378263280831694,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": -29.200512838335364,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 5.242733116442313,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 4.603518339387308,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": -30.615534205813315,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -31.364385878787868,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 3.1350798720718105,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": -30.954787460032303,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -31.706097967937996,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 2.6747927848393,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": -33.05160875242942,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -28.449686743076057,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -29.200512838335364,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 5.242733116442313,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": -30.615534205813315,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -30.954787460032303,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -28.449686743076057,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "phi_final": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 17.52354621572217
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 6.102048643097623
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 50.23433823965467
+    },
+    {
+     "stage": "DC",
+     "value": 0.02341556403240907
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "signed_phi": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 2.501790200535684
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 2.1006692234293496
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": -33.74645605948598
+    },
+    {
+     "stage": "DC",
+     "value": 0.6943098924448865
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ]
+  },
+  "A-C": {
+   "pair": [
+    "A",
+    "C"
+   ],
+   "v_ab": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 44.469071648092275,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 28.176489329389685,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": 90.89148423874849,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 47.343921194930516,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": 100.6532491924517,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 44.469071648092275,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 44.469071648092275,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": 86.88790819973154,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 28.176489329389685,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 28.176489329389685,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": 90.89148423874849,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": 90.89148423874849,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 47.343921194930516,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 47.343921194930516,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": 100.6532491924517,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 100.6532491924517,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 44.469071648092275,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": 86.88790819973154,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 86.88790819973154,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 28.176489329389685,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 90.89148423874849,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 47.343921194930516,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 100.6532491924517,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 86.88790819973154,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "v_ba": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 40.98428420524366,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 28.54669582828315,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": 91.5810715615568,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 46.727092104501644,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": 100.96254424534939,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 40.98428420524366,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 40.98428420524366,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": 88.59961781519984,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 28.54669582828315,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 28.54669582828315,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": 91.5810715615568,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": 91.5810715615568,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 46.727092104501644,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 46.727092104501644,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": 100.96254424534939,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 100.96254424534939,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 40.98428420524366,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": 88.59961781519984,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 88.59961781519984,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 28.54669582828315,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 91.5810715615568,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 46.727092104501644,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": 100.96254424534939,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 88.59961781519984,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": 95.43775138819612,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "share": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 0.2254294267324038
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 0.08172728234879832
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 0.6928432909187978
+    },
+    {
+     "stage": "DC",
+     "value": 0.0
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "phi_ab": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 22.494504415392957
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 7.4655427596815835
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 65.47770421312157
+    },
+    {
+     "stage": "DC",
+     "value": 0.0
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "phi_ba": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 20.534450752748498
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 8.134193349193461
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 66.76910728625415
+    },
+    {
+     "stage": "DC",
+     "value": 0.0
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "status": "ran",
+   "rmsd_ab": 95.43775138819612,
+   "signed_v": [
+    {
+     "value": 0.0,
+     "coalition": "EMPTY"
+    },
+    {
+     "value": 7.735892781043676,
+     "coalition": "DECOMPOSITION"
+    },
+    {
+     "value": 9.52245184829309,
+     "coalition": "TRANSPOSITION"
+    },
+    {
+     "value": -57.47945098161959,
+     "coalition": "TEMPERATURE"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "AC"
+    },
+    {
+     "value": 16.271221440779406,
+     "coalition": "DECOMPOSITION+TRANSPOSITION"
+    },
+    {
+     "value": -49.77883983507883,
+     "coalition": "DECOMPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 7.735892781043676,
+     "coalition": "DECOMPOSITION+DC"
+    },
+    {
+     "value": 7.735892781043676,
+     "coalition": "DECOMPOSITION+AC"
+    },
+    {
+     "value": -48.345130059997715,
+     "coalition": "TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 9.52245184829309,
+     "coalition": "TRANSPOSITION+DC"
+    },
+    {
+     "value": 9.52245184829309,
+     "coalition": "TRANSPOSITION+AC"
+    },
+    {
+     "value": -57.47945098161959,
+     "coalition": "TEMPERATURE+DC"
+    },
+    {
+     "value": -57.47945098161959,
+     "coalition": "TEMPERATURE+AC"
+    },
+    {
+     "value": 0.0,
+     "coalition": "DC+AC"
+    },
+    {
+     "value": -41.566402446087906,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE"
+    },
+    {
+     "value": 16.271221440779406,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC"
+    },
+    {
+     "value": 16.271221440779406,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+AC"
+    },
+    {
+     "value": -49.77883983507883,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -49.77883983507883,
+     "coalition": "DECOMPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 7.735892781043676,
+     "coalition": "DECOMPOSITION+DC+AC"
+    },
+    {
+     "value": -48.345130059997715,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -48.345130059997715,
+     "coalition": "TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 9.52245184829309,
+     "coalition": "TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": -57.47945098161959,
+     "coalition": "TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -41.566402446087906,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC"
+    },
+    {
+     "value": -41.566402446087906,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+AC"
+    },
+    {
+     "value": 16.271221440779406,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+DC+AC"
+    },
+    {
+     "value": -49.77883983507883,
+     "coalition": "DECOMPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -48.345130059997715,
+     "coalition": "TRANSPOSITION+TEMPERATURE+DC+AC"
+    },
+    {
+     "value": -41.566402446087906,
+     "coalition": "DECOMPOSITION+TRANSPOSITION+TEMPERATURE+DC+AC"
+    }
+   ],
+   "phi_final": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 21.514477584070725
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 7.799868054437523
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": 66.12340574968786
+    },
+    {
+     "stage": "DC",
+     "value": 0.0
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ],
+   "signed_phi": [
+    {
+     "stage": "DECOMPOSITION",
+     "value": 7.246436921489008
+    },
+    {
+     "stage": "TRANSPOSITION",
+     "value": 8.856571342654272
+    },
+    {
+     "stage": "TEMPERATURE",
+     "value": -57.66941071023119
+    },
+    {
+     "stage": "DC",
+     "value": 0.0
+    },
+    {
+     "stage": "AC",
+     "value": 0.0
+    }
+   ]
+  },
+  "B-C": {
+   "reason": "not run — outcome 1 (no stage exceeds tau)",
+   "status": "not run"
+  }
+ },
+ "reexec": null,
+ "pipelines": {
+  "A": [
+   {
+    "model": "erbs",
+    "stage": "DECOMPOSITION",
+    "dhi_kwh_m2": 922.3991891735409,
+    "dni_kwh_m2": 1461.5726872669384,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "isotropic",
+    "stage": "TRANSPOSITION",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": 1865.6580834208937
+   },
+   {
+    "model": "faiman",
+    "stage": "TEMPERATURE",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": 65.60891330000074,
+    "temp_cell_mean_c": 37.64668952643087,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "singlediode_cec",
+    "stage": "DC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 10253.97904300594,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "sandia",
+    "stage": "AC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 9837.301108865018,
+    "poa_global_kwh_m2": null
+   }
+  ],
+  "B": [
+   {
+    "model": "disc",
+    "stage": "DECOMPOSITION",
+    "dhi_kwh_m2": 1053.581333453208,
+    "dni_kwh_m2": 1253.8457679588878,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "haydavies",
+    "stage": "TRANSPOSITION",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": 1866.5567194458924
+   },
+   {
+    "model": "pvsyst_cell",
+    "stage": "TEMPERATURE",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": 59.14971011577521,
+    "temp_cell_mean_c": 40.0139372067789,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "singlediode_desoto",
+    "stage": "DC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 10134.640007250184,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "sandia",
+    "stage": "AC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 9723.507476570618,
+    "poa_global_kwh_m2": null
+   }
+  ],
+  "C": [
+   {
+    "model": "dirint",
+    "stage": "DECOMPOSITION",
+    "dhi_kwh_m2": 1044.9901228882527,
+    "dni_kwh_m2": 1199.4607713371645,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "perez",
+    "stage": "TRANSPOSITION",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": 1871.9322406168362
+   },
+   {
+    "model": "ross",
+    "stage": "TEMPERATURE",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": 62.936065917299615,
+    "temp_cell_mean_c": 41.6948320167367,
+    "annual_energy_kwh": null,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "singlediode_cec",
+    "stage": "DC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 10075.379270876832,
+    "poa_global_kwh_m2": null
+   },
+   {
+    "model": "sandia",
+    "stage": "AC",
+    "dhi_kwh_m2": null,
+    "dni_kwh_m2": null,
+    "temp_cell_max_c": null,
+    "temp_cell_mean_c": null,
+    "annual_energy_kwh": 9667.16270861225,
+    "poa_global_kwh_m2": null
+   }
+  ]
+ }
+}

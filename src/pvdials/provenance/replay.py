@@ -75,6 +75,9 @@ def _dataframe_from_payload(payload: dict) -> pd.DataFrame:
     return pd.DataFrame(data, index=index)
 
 
+dataframe_from_payload = _dataframe_from_payload  # public name for readers outside this module
+
+
 def _module_record(attrs: dict) -> ModuleRecord:
     return load_module(unwrap_value(attrs["module_library"]), unwrap_value(attrs["module_name"]))
 
