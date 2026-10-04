@@ -157,14 +157,13 @@ def _save(analysis_id: str, name: str, status: str, inputs: dict, **sections) ->
     save_analysis(analysis_id, name, status, inputs, **sections)
 
 
-def run_pipelines(
-    inputs: dict, analysis_id: str, progress: Callable[[str], None] | None = None
-) -> RunState:
-    """Steps 1 to 2 of the pipeline (read, site, hardware, run the three pipelines), saving as
-    each finishes. Raises AnalysisError with a message for the page."""
-    say = progress or (lambda _text: None)
-    started_at = datetime.now(UTC).isoformat()
-    started_clock = time.monotonic()
+def _execute_steps(
+    inputs: dict, analysis_id: str, say: Callable[[str], None], save: bool
+) -> tuple[Live, str]:
+    """Read the file, set up the site, prepare the hardware and run the three pipelines, with the step
+    functions of pvdials.analysis. save=True writes load_done and site_done as the run does; save=False
+    (a rebuild) writes nothing to the analysis row. Provenance records are content-addressed, so the
+    same inputs give the same record ids and no new rows. Returns the live objects and the weather path."""
     defaults = load_defaults()
     tau = tau_from_inputs(inputs)
     config = config_from_inputs(inputs)
@@ -173,14 +172,16 @@ def run_pipelines(
 
     say(wording.R_PROGRESS_LOAD)
     load_result = step_load_and_validate(config.weather_file)
-    _save(analysis_id, config.name, "load_done", inputs)
+    if save:
+        _save(analysis_id, config.name, "load_done", inputs)
 
     say(wording.R_PROGRESS_SITE)
     site_result = step_site_and_offset(
         load_result, config, defaults, tau,
         offset=offset_from_inputs(inputs), site=site_from_inputs(inputs, load_result),
     )
-    _save(analysis_id, config.name, "site_done", inputs)
+    if save:
+        _save(analysis_id, config.name, "site_done", inputs)
 
     say(wording.R_PROGRESS_HARDWARE)
     hardware = step_hardware(load_result, site_result, config, defaults)
@@ -188,6 +189,19 @@ def run_pipelines(
         config, hardware, defaults, analysis_id,
         progress=lambda label: say(wording.R_PROGRESS_PIPELINE.format(label=label)),
     )
+    return Live(config, defaults, tau, load_result, site_result, hardware, pipelines), config.weather_file
+
+
+def run_pipelines(
+    inputs: dict, analysis_id: str, progress: Callable[[str], None] | None = None
+) -> RunState:
+    """Steps 1 to 2 of the pipeline (read, site, hardware, run the three pipelines), saving as
+    each finishes. Raises AnalysisError with a message for the page."""
+    say = progress or (lambda _text: None)
+    started_at = datetime.now(UTC).isoformat()
+    started_clock = time.monotonic()
+    live, _path = _execute_steps(inputs, analysis_id, say, save=True)
+    config, pipelines, site_result, load_result = live.config, live.pipelines, live.site_result, live.load_result
 
     say(wording.R_PROGRESS_SAVE)
     summaries = report.build_stage_summaries(pipelines, site_result.ctx.daylight)
@@ -201,10 +215,19 @@ def run_pipelines(
 
     say(wording.R_PROGRESS_READ_BACK)
     series = read_back(analysis_id)
-    live = Live(config, defaults, tau, load_result, site_result, hardware, pipelines)
     return _build_state(
         analysis_id, inputs, run_info, pipelines_dict, series, site_result.ctx.daylight, live, list(pipelines.record_ids)
     )
+
+
+def rebuild_live(
+    inputs: dict, analysis_id: str, progress: Callable[[str], None] | None = None
+) -> Live:
+    """The live objects a later step needs (Phase 1 and Phase 3 run on them), rebuilt by repeating
+    steps 1 to 3 from the stored inputs. Writes nothing to the analysis row, so the stored run_info and
+    results stay as they are; the provenance records come out with the same ids as before."""
+    live, _path = _execute_steps(inputs, analysis_id, progress or (lambda _text: None), save=False)
+    return live
 
 
 def _build_state(

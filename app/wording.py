@@ -587,3 +587,73 @@ R_PROV_DATA_HASH_HELP = (
 )
 R_IDS_RECORD = "Record ID"
 R_IDS_STAGE_HASH = "{stage} output"
+
+# --- Page 4 · Analysis --------------------------------------------------------------------------------
+P4_VIEW_RUN = "View run provenance"
+P4_PAIR = "{a} – {b}"
+P4_P1_BUTTON = "Run Phase 1 — Localization"
+P4_P1_CAPTION = "Where disagreement first exceeds τ"
+P4_P2_BUTTON = "Run Phase 2 — Propagation"
+P4_P2_CAPTION = "How disagreement grows or shrinks"
+P4_P3_BUTTON = "Run Phase 3 — Contribution"
+P4_P3_CAPTION = "Each stage's share of the final gap"
+P4_LOCKED = "Phase 2 and Phase 3 unlock after Phase 1 has run — they use its results."
+P4_RAN = "Done · running again gives the same values."
+P4_COMING = "This part of the page arrives in the next step of the build."
+P4_PROGRESS_TITLE = "Running Phase 1"
+P4_PROGRESS_REBUILD = "Rebuilding the pipelines from the stored inputs"
+P4_PROGRESS_COMPARE = "Comparing the pipelines stage by stage"
+P4_PROGRESS_SAVE = "Saving the Phase 1 result"
+P4_FAILED = "Phase 1 could not finish ({detail}). Go back to step 3 and run the pipelines again."
+
+P4_OUTCOME = "Outcome {n}"
+P4_K = "k = {stage}"
+P4_K_NONE = "k = none"
+P4_K_TIP = HELP_K
+P4_NOT_COMPUTABLE_TITLE = "Not computable"
+
+# k band (KT E.2): where k stays the same as τ changes, from the stored nRMSD values only
+P4_BAND_FIRST = "k stays at {stage} for any τ below {upper}"
+P4_BAND_LATER = "k stays at {stage} for τ from {lower} up to, but not including, {upper}"
+P4_BAND_NONE = "No stage is over τ for any τ at or above {upper}"
+
+P4_HEAT_TITLE = "Disagreement map · pair × stage"
+P4_HEAT_SUB = (
+    "nRMSD per stage. Darker = larger. A heavy outline and the words “over τ” mark cells above τ = {tau}."
+)
+P4_OVER_TAU = "over τ"
+P4_WITHIN_TAU = "within τ"
+P4_FIRST_OVER = "First stage over τ"
+P4_NA = "not computable"
+P4_HEAT_AXIS = ("Decomposition", "Transposition", "Cell temperature", "DC", "AC")
+P4_STAGE_TITLE = "Stage table against τ"
+P4_STAGE_PAIR = "Pair"
+P4_COL_STAGE = "Stage"
+P4_COL_NRMSD = "nRMSD"
+P4_COL_AGAINST = "Against τ = {tau}"
+P4_COL_MODELS = "Models at this stage"
+P4_MODELS_SAME = "Same model"
+P4_MODELS_DIFFER = "{a}: {model_a}<br>{b}: {model_b}"
+P4_UNITLESS = "nRMSD is unitless. The vertical line marks τ = {tau}."
+P4_TAU_TEXT = "{value:g} ({source})"
+
+P4_DEFS_OPEN = "What these numbers mean"
+P4_METHOD_OPEN = "Method note"
+P4_FULL_OPEN = "Full Phase 1 table"
+P4_DEF_OUTCOMES = (
+    "Outcome 1: no stage exceeds τ.",
+    "Outcome 2: some stage exceeds τ and the final AC difference is above τ.",
+    "Outcome 3: some stage exceeds τ but the final AC difference is below τ.",
+)
+P4_METHOD_LINES = (
+    "Both pipelines are compared on daylight rows only (sun more than {margin:g}° above the horizon).",
+    "Each stage's nRMSD divides the RMSD by the P95 − P5 range of both pipelines' values pooled together.",
+    "A stage with too few daylight samples, or no spread in the pooled values, is not computable.",
+    "k is the first stage, in pipeline order, where nRMSD is above τ.",
+)
+P4_METHOD_LINES_PLAIN = P4_METHOD_LINES[1:]
+P4_FULL_COLUMNS = ("Pair", "Stage", "Unit", "RMSD", "nRMSD", "MAD", "MBD", "Systematic share", "Pooled values")
+P4_FULL_UNITLESS = "–"
+P4_PHI_NEGATIVE = "φ can be negative. The stages still add up to RMSD(A,B)."
+P4_PHASE2_NOT_RUN_FAILED = "not run — a pipeline failed its checks"
+P4_DERIVED_NOTE = "Shown from Phase 1: nothing to run."

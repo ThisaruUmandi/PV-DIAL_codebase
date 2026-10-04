@@ -543,3 +543,28 @@ div.st-key-card_banner [data-testid="stColumn"]:last-child { justify-content: ce
 div.st-key-card_pipe_A, div.st-key-card_pipe_B, div.st-key-card_pipe_C { gap: 4px; padding: 14px 20px 12px; }
 .pv-card-foot { padding-top: 0; }
 .pv-record span { min-width: 170px; }
+
+/* ---- Page 4 · Analysis ---------------------------------------------------------------------------------- */
+.pv-btn-note { margin: 4px 2px 0; font-size: 13px; color: var(--pv-text-2); line-height: 1.4; }
+div.st-key-card_empty { background: var(--pv-card); border: 1px solid var(--pv-border); border-radius: 12px; padding: 28px 24px; }
+.pv-empty { margin: 0; font-size: 15px; color: var(--pv-text); }
+div.st-key-card_pair_AB, div.st-key-card_pair_AC, div.st-key-card_pair_BC { padding: 18px 20px; gap: 6px; }
+.pv-pair-head { font-family: var(--pv-mono); font-size: 13px; font-weight: 500; color: var(--pv-teal-dark); }
+.pv-outcome { font-size: 22px; font-weight: 600; margin-top: 6px; }
+.pv-outcome-text { font-size: 14px; font-weight: 600; color: var(--pv-text); }
+.pv-k { font-size: 14px; margin-top: 8px; font-weight: 500; cursor: help; }
+.pv-pair-sentence { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--pv-text); }
+.pv-band { margin: 6px 0 0; font-size: 13px; line-height: 1.45; color: var(--pv-text-2); }
+div.st-key-card_heat, div.st-key-card_stage { gap: 12px; }
+.pv-over { font-size: 11px; font-weight: 700; color: var(--pv-text); border: 2px solid var(--pv-text); border-radius: 4px; padding: 0 4px; margin-left: 6px; }
+.pv-na { font-size: 12px; color: var(--pv-text-2); text-align: right; }
+.pv-first { display: block; font-size: 12px; font-weight: 600; color: var(--pv-teal-dark); }
+.pv-models { font-size: 13px; line-height: 1.4; }
+.pv-stage-table td.pv-models { font-family: var(--pv-mono); }
+.pv-defs { display: flex; flex-direction: column; gap: 8px; margin: 0; font-size: 13px; }
+.pv-defs > div { display: grid; grid-template-columns: 90px 1fr; gap: 10px; }
+.pv-defs dt { font-weight: 600; }
+.pv-defs dd { margin: 0; line-height: 1.5; color: var(--pv-text); }
+.pv-method { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
+.pv-full td, .pv-full th { font-size: 12px; white-space: nowrap; }
+.pv-full td:not(:nth-child(-n+3)) { text-align: right; }
