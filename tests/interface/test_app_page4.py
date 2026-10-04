@@ -65,11 +65,21 @@ def _counts() -> dict:
 
 
 @pytest.fixture(scope="module")
-def thesis():
+def _thesis_state():
     """The thesis pipelines run once; each test that presses Phase 1 uses its own copy of the session."""
     _clean()
     inputs = _inputs_with_tau(None)
     return rl.run_pipelines(inputs, "p4-thesis"), inputs
+
+
+@pytest.fixture
+def thesis(_thesis_state):
+    """The run above. Tests that start from a clean database remove its rows; when that has happened the
+    same run is made again (provenance ids are content hashes, so the records come out identical)."""
+    run, inputs = _thesis_state
+    if load_analysis("p4-thesis") is None:
+        run = rl.run_pipelines(inputs, "p4-thesis")
+    return run, inputs
 
 
 def _fresh_run(tau: float | None = None, analysis_id: str = "p4-page"):
@@ -348,7 +358,6 @@ def test_buttons_after_phase_1_when_no_pair_exceeds_tau_say_why_beside_them():
     text = _text(at)
     assert wording.PHASE2_NOT_RUN in text and wording.PHASE3_OUTCOME_1 in text
     assert at.button(key="w4_p2").disabled and at.button(key="w4_p3").disabled
-    assert wording.P4_COMING not in text
 
 
 def test_gating_step_5_needs_a_k_and_the_report_needs_phase_1():
@@ -409,3 +418,460 @@ def test_tooltips_come_from_wording_and_the_page_has_no_hash_ranking_or_banned_w
     for word in ("rank", "winner", "highest", "lowest", "best", "recommend", "suggest", "optimal", "improv", "error", "compensat"):
         assert word not in text, word
     assert not re.search(r"\bcorrect", text)
+
+
+# --- Phase 2: propagation profile (6b) -------------------------------------------------------------------------------------
+
+
+def _press_phase_1_then_2(tau: float | None = None):
+    run, inputs = _fresh_run(tau=tau)
+    at = _open(run, inputs)
+    at.button(key="w4_p1").click().run()
+    return at
+
+
+def test_phase_2_values_are_the_mean_max_and_change_of_the_three_pairs_nrmsd(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    phase2 = al.run_phase2(ss)
+    view = al.phase2_view(phase2)
+    assert view.ran and view.pair_labels == ["A-B", "A-C", "B-C"]
+    # independent arithmetic on the stored Phase 1 values (not the backend's own)
+    stored = {key: {m["stage"].lower(): m["nrmsd"] for m in phase1[key]["metrics"]} for key in phase1}
+    previous = 0.0
+    for stage in STAGES:
+        values = [stored[key][stage] for key in ("A-B", "A-C", "B-C")]
+        mean = sum(values) / 3
+        assert view.pairs["A-B"][stage] == stored["A-B"][stage] and view.pairs["B-C"][stage] == stored["B-C"][stage]
+        assert view.mean[stage] == pytest.approx(mean, rel=1e-12) and view.max[stage] == max(values)
+        assert view.delta[stage] == pytest.approx(mean - previous, abs=1e-12)  # the first stage is compared with 0
+        previous = mean
+    assert view.max["temperature"] == pytest.approx(0.1946, abs=5e-5)  # the A–C temperature value of section D
+
+
+def test_phase_2_is_saved_with_the_shape_the_command_line_stores_and_keeps_the_other_sections(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    al.run_phase1(ss)
+    before = load_analysis("p4-thesis")
+    al.run_phase2(ss)
+    row = load_analysis("p4-thesis")
+    live = run.live
+    results = step_disagreement_check(live.pipelines, live.site_result.ctx, live.defaults, tau=live.tau)
+    assert row["phase2"] == ss["phase2"] == phase2_to_dict(step_phase2(results), results)
+    assert row["status"] == "phase2_done"
+    for section in ("phase1", "phase3", "run_info", "pipelines", "inputs"):
+        assert row[section] == before[section], section
+
+
+def test_phase_2_needs_no_live_pipelines_and_running_it_again_changes_nothing(thesis, monkeypatch):
+    run, inputs = thesis
+    first_ss = _session(run, inputs, "p4-thesis")
+    al.run_phase1(first_ss)
+    first = copy.deepcopy(al.run_phase2(first_ss))
+    reopened = rl.reopen("p4-thesis")
+    monkeypatch.setattr(rl, "rebuild_live", lambda *a, **k: pytest.fail("Phase 2 must not rebuild the pipelines"))
+    counts = _counts()
+    ss = _session(reopened, inputs, "p4-thesis")
+    ss["phase1"] = first_ss["phase1"]
+    assert al.run_phase2(ss) == first and _counts() == counts
+
+
+def test_pressing_phase_2_draws_the_profile_with_a_table_of_the_same_numbers():
+    at = _press_phase_1_then_2()
+    assert not at.button(key="w4_p2").disabled
+    at.button(key="w4_p2").click().run()
+    assert not at.exception
+    view = al.phase2_view(at.session_state["phase2"])
+    text = _text(at)
+    assert wording.P4_P2_TITLE in text and wording.P4_P2_NOTE in text
+    rows = al.phase2_rows(view)
+    for row in rows:
+        for cell in (*row["pairs"], row["mean"], row["max"], row["delta"]):
+            assert cell in text
+    line = next(frames for frames in _chart_frames(at) if "pair" in frames[0] and frames[0]["pair"].nunique() == 3 and len(frames[0]) == 15 and "over" not in frames[0])[0]
+    for key in view.pair_labels:
+        label = wording.P4_PAIR.format(a=key[0], b=key[2])
+        for index, stage in enumerate(STAGES):
+            cell = line[(line["pair"] == label) & (line["stage"] == wording.P4_HEAT_AXIS[index])].iloc[0]
+            assert cell["nrmsd"] == pytest.approx(view.pairs[key][stage], abs=1e-12) and cell["text"] == rows[index]["pairs"][view.pair_labels.index(key)]
+    assert at.session_state["phase2"] == load_analysis("p4-page")["phase2"]
+
+
+def test_the_pairs_are_told_apart_by_dash_and_marker_as_well_as_colour_and_tau_is_drawn_from_the_run():
+    import altair as alt  # noqa: F401  (the chart is an Altair chart)
+
+    from app import analysis_charts as charts
+
+    run, inputs = _fresh_run(tau=0.01)
+    ss = _session(run, inputs, "p4-page")
+    al.run_phase1(ss)
+    view = al.phase2_view(al.run_phase2(ss))
+    tau = al.tau_of(ss["phase1"])
+    spec = charts.propagation_chart(view, tau["value"], al.tau_text(tau)).to_dict()
+    text = str(spec)
+    layer = {key: next(layer for layer in spec["layer"] if key in layer["encoding"]) for key in ("strokeDash", "shape")}
+    dashes = layer["strokeDash"]["encoding"]["strokeDash"]["scale"]
+    shapes = layer["shape"]["encoding"]["shape"]["scale"]
+    colours = next(layer for layer in spec["layer"] if layer["mark"]["type"] == "line")["encoding"]["color"]["scale"]
+    assert len({str(d) for d in dashes["range"]}) == 3 and len(set(shapes["range"])) == 3 and len(set(colours["range"])) == 3
+    assert dashes["domain"] == ["A – B", "A – C", "B – C"]  # fixed order
+    datasets = spec["datasets"]
+    assert any(row.get("tau") == 0.01 for rows in datasets.values() for row in rows)  # τ comes from the run, not the code
+    assert "τ = 0.01 (user_entered)" in text
+    pipelines_look = {"circle", "square", "triangle-up"}
+    assert not pipelines_look & set(shapes["range"])  # not confused with the A, B, C look of page 3
+
+
+def test_when_no_pair_exceeds_tau_the_not_run_state_shows_at_once_without_a_chart():
+    at = _press_phase_1_then_2(tau=0.5)
+    text = _text(at)
+    assert wording.PHASE2_NOT_RUN in text
+    assert at.button(key="w4_p2").disabled
+    assert wording.P4_P2_TITLE not in text and len(at.get("vega_lite_chart")) == 2  # heatmap and stage bars only
+    assert at.session_state["phase2"] == {"status": "not run", "reason": "no pair exceeds tau"}
+
+
+def test_a_failed_check_reason_and_a_negative_change_are_shown_as_stored():
+    run, inputs = _fresh_run()
+    ss = _session(run, inputs, "p4-page")
+    phase1 = al.run_phase1(ss)
+    failed = _open(run, inputs, phase1=phase1, phase1_done=True, has_k=True,
+                   phase2={"status": "not run", "reason": "a pipeline failed its checks"})
+    assert wording.P4_PHASE2_NOT_RUN_FAILED in _text(failed) and failed.button(key="w4_p2").disabled
+    stored = al.run_phase2(ss)
+    stored["delta"][2]["value"] = -0.0123  # a stage whose mean falls
+    shown = _open(run, inputs, phase1=phase1, phase1_done=True, has_k=True, phase2=stored)
+    assert "−0.0123" in _text(shown) and "-0.0123" not in _text(shown)
+
+
+def test_a_rerun_of_the_page_draws_the_stored_results_and_computes_nothing(monkeypatch):
+    at = _press_phase_1_then_2()
+    at.button(key="w4_p2").click().run()
+    before = _text(at)
+
+    def refuse(*args, **kwargs):
+        pytest.fail("a phase was recomputed on a rerun")
+
+    monkeypatch.setattr(al, "step_disagreement_check", refuse)
+    monkeypatch.setattr(al, "step_phase2", refuse)
+    monkeypatch.setattr(al, "step_phase3", refuse)
+    at.run()
+    assert not at.exception and _text(at) == before
+    at.get("button_group")[0].set_value("A-C")
+    at.run()
+    assert not at.exception and wording.P4_P2_TITLE in _text(at)
+
+
+def test_phase_2_page_has_no_hash_and_no_banned_word():
+    at = _press_phase_1_then_2()
+    at.button(key="w4_p2").click().run()
+    text = _text(at).lower()
+    assert not HEX.findall(text)
+    for word in ("recommend", "suggest", "optimal", "improv", "best", "error", "compensat", "winner", "rank"):
+        assert word not in text, word
+    assert not re.search(r"\bcorrect", text)
+
+
+# --- Phase 3: contribution of each stage (6c) -------------------------------------------------------------------------------
+
+# section D, φ final (W) by stage, and the totals they add up to
+THESIS_PHI = {
+    "A-B": ([17.52, 6.10, 50.23, 0.02, 0.0], 73.88),
+    "A-C": ([21.51, 7.80, 66.12, 0.0, 0.0], 95.44),
+}
+
+
+def _stored_phase1(run, inputs) -> dict:
+    return al.run_phase1(_session(run, inputs, "p4-thesis"))
+
+
+def _phase3_entry(phi_final, rmsd=None, pair=("A", "B")) -> dict:
+    """A stored Phase 3 entry, as phase3_pair_to_dict writes it, for the pages that show constructed numbers."""
+    from pvdials.analysis import ALL_STAGES  # noqa: F401  (stage names as the backend writes them)
+
+    names = ["DECOMPOSITION", "TRANSPOSITION", "TEMPERATURE", "DC", "AC"]
+    total = sum(phi_final) if rmsd is None else rmsd
+    stage_list = lambda values: [{"stage": n, "value": v} for n, v in zip(names, values, strict=True)]
+    return {
+        "status": "ran", "pair": list(pair), "rmsd_ab": total,
+        "phi_ab": stage_list(phi_final), "phi_ba": stage_list(phi_final), "phi_final": stage_list(phi_final),
+        "share": stage_list([v / total for v in phi_final]), "signed_phi": stage_list(phi_final),
+        "v_ab": [], "v_ba": [], "signed_v": [],
+    }
+
+
+def test_thesis_phase_3_gives_the_section_d_contributions_and_they_add_up_to_rmsd(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    al.run_phase1(ss)
+    messages: list[str] = []
+    phase3 = al.run_phase3(ss, messages.append)
+    for key, (expected, total) in THESIS_PHI.items():
+        entry = phase3[key]
+        assert entry["status"] == "ran"
+        found = [item["value"] for item in entry["phi_final"]]
+        assert [round(v, 2) for v in found] == expected, key
+        assert sum(found) == pytest.approx(entry["rmsd_ab"], abs=1e-6)
+        assert round(entry["rmsd_ab"], 2) == total
+        assert sum(item["value"] for item in entry["share"]) == pytest.approx(1.0, abs=1e-9)
+    # RMSD(A,B) at the final stage is Phase 1's own RMSD for AC
+    ab_ac = next(m for m in ss["phase1"]["A-B"]["metrics"] if m["stage"] == "AC")
+    assert phase3["A-B"]["rmsd_ab"] == pytest.approx(ab_ac["rmsd"], abs=1e-6)
+    assert phase3["B-C"] == phase3_pair_to_dict(NOT_RUN_OUTCOME_1)  # the outcome-1 pair stays as Phase 1 settled it
+
+
+def test_one_press_computes_every_eligible_pair_with_a_message_for_each(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    al.run_phase1(ss)
+    messages: list[str] = []
+    al.run_phase3(ss, messages.append)
+    pair_messages = [m for m in messages if m.startswith("Attributing")]
+    assert pair_messages == [
+        "Attributing the final AC difference for A – B (1 of 2). This takes a few seconds.",
+        "Attributing the final AC difference for A – C (2 of 2). This takes a few seconds.",
+    ]
+    assert messages[-1] == wording.P4_P3_PROGRESS_SAVE
+    assert al.phase3_done(ss["phase1"], ss["phase3"])
+
+
+def test_phase_3_is_saved_as_the_command_line_stores_it_and_a_second_press_adds_nothing(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    before = load_analysis("p4-thesis")
+    al.run_phase3(ss)
+    row = load_analysis("p4-thesis")
+    live = run.live
+    results = step_disagreement_check(live.pipelines, live.site_result.ctx, live.defaults, tau=live.tau)
+    cli = {
+        f"{a}-{b}": phase3_pair_to_dict(v)
+        for (a, b), v in step_phase3(live.pipelines, results, live.hardware, live.site_result.ctx, live.defaults, "p4-thesis").items()
+    }
+    assert row["phase3"] == ss["phase3"] == cli and row["status"] == "phase3_done"
+    for section in ("phase1", "phase2", "run_info", "pipelines", "inputs"):
+        assert row[section] == before[section], section
+    assert row["phase1"] == phase1
+    counts, first = _counts(), copy.deepcopy(ss["phase3"])
+    al.run_phase3(_session(run, inputs, "p4-thesis") | {"phase1": phase1, "phase3": None})
+    assert _counts() == counts and load_analysis("p4-thesis")["phase3"] == first
+
+
+def test_reopening_and_running_phase_3_again_gives_the_same_records_rows_and_analysis_id(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    first = copy.deepcopy(al.run_phase3(ss))
+
+    def linked() -> set[str]:
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT record_id FROM analysis_records WHERE analysis_id = %s", ("p4-thesis",))
+            return {r[0] for r in cur.fetchall()}
+
+    records, counts, before = linked(), _counts(), load_analysis("p4-thesis")
+    assert len(records) >= 3 + 20  # three original records and the derived runs of the two pairs
+    reopened = rl.reopen("p4-thesis")
+    messages: list[str] = []
+    again = _session(reopened, inputs, "p4-thesis") | {"phase1": phase1}
+    result = al.run_phase3(again, messages.append)
+    assert wording.P4_PROGRESS_REBUILD in messages  # the live pipelines were rebuilt from the stored inputs
+    assert result == first and linked() == records and _counts() == counts
+    after = load_analysis("p4-thesis")
+    assert after["id"] == before["id"] == "p4-thesis" and after["run_info"] == before["run_info"]
+
+
+def test_a_stage_with_the_same_model_keeps_its_stored_zero_and_is_shown_as_same_model(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    phase3 = al.run_phase3(ss)
+    view = al.phase3_views(phase1, phase3)[0]  # A–B: both pipelines use sandia at AC
+    ac = view.rows[-1]
+    assert ac.same_model is True and ac.phi_final == 0.0 and ac.phi_ab == 0.0  # the stored value is untouched
+    assert phase3["A-B"]["phi_final"][-1]["value"] == 0.0
+    assert not any(row.same_model for row in view.rows[:4])
+    ac_c = al.phase3_views(phase1, phase3)[1].rows
+    assert [row.same_model for row in ac_c] == [False, False, False, True, True]  # A–C also share the DC model
+
+
+def _open_with(run, inputs, phase1, phase3, **extra):
+    return _open(run, inputs, phase1=phase1, phase1_done=True, has_k=True, phase3=phase3, **extra)
+
+
+def _p3_frame(at):
+    return next(f for chart in _chart_frames(at) for f in chart if "kind" in f.columns)
+
+
+def test_pressing_phase_3_shows_the_table_the_efficiency_line_and_a_waterfall_that_ends_at_rmsd():
+    run, inputs = _fresh_run()
+    at = _open(run, inputs)
+    at.button(key="w4_p1").click().run()
+    assert not at.button(key="w4_p3").disabled
+    at.button(key="w4_p3").click().run()
+    assert not at.exception
+    ss = at.session_state
+    view = al.phase3_views(ss["phase1"], ss["phase3"])[0]
+    text = _text(at)
+    for row in view.rows:
+        if not row.same_model:
+            for value in (row.phi_ab, row.phi_ba, row.phi_final):
+                assert al.fmt_watts(value) in text
+    assert wording.SAME_MODEL in text  # the AC row
+    total, rmsd, agrees = al.efficiency(view)
+    assert agrees and f"add up to {al.fmt_watts(total)} W; RMSD(A,B) is {al.fmt_watts(rmsd)} W." in text
+    frame = _p3_frame(at)
+    assert list(frame["kind"]) == ["stage"] * 5 + ["total"]
+    assert frame.iloc[-1]["end"] == view.rmsd_ab and frame.iloc[-1]["start"] == 0.0  # the last bar is RMSD(A,B)
+    assert frame.iloc[4]["end"] == pytest.approx(view.rmsd_ab, abs=1e-6)  # the stages end where it ends
+    assert list(frame["text"][:5]) == [wording.P4_P3_BAR_SAME if r.same_model else al.fmt_watts(r.phi_final) for r in view.rows]
+    assert not re.search(r"\bsigned\b", text.lower())
+    assert at.session_state["phase3"] == load_analysis("p4-page")["phase3"]
+
+
+def test_the_thesis_waterfall_ends_at_rmsd_ab_from_the_charts_own_data(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    phase3 = al.run_phase3(ss)
+    at = _open_with(run, inputs, phase1, phase3)
+    frame = _p3_frame(at)
+    assert round(frame.iloc[-1]["end"], 2) == 73.88 and frame.iloc[-1]["end"] == phase3["A-B"]["rmsd_ab"]
+    assert [round(v, 2) for v in frame["value"][:5]] == THESIS_PHI["A-B"][0]
+    at.get("button_group")[1].set_value("A-C")
+    at.run()
+    frame = _p3_frame(at)
+    assert round(frame.iloc[-1]["end"], 2) == 95.44 and [round(v, 2) for v in frame["value"][:5]] == THESIS_PHI["A-C"][0]
+
+
+def test_a_negative_phi_has_a_true_minus_in_the_table_and_draws_downward_with_its_signed_value(thesis):
+    run, inputs = thesis
+    phase1 = _stored_phase1(run, inputs)
+    entry = _phase3_entry([40.0, -3.2, 20.0, 0.5, 0.0])
+    at = _open_with(run, inputs, phase1, {"A-B": entry})
+    text = _text(at)
+    assert "−3.20" in text and "-3.20" not in text
+    for banned in ("steps down", "reduces", "lowers", "negative value"):
+        assert banned not in text.lower().replace("φ can be negative", "")
+    frame = _p3_frame(at)
+    transposition = frame.iloc[1]
+    assert transposition["end"] < transposition["start"] and transposition["value"] == -3.2 and transposition["text"] == "−3.20"
+    assert frame.iloc[-1]["end"] == pytest.approx(57.3) and frame.iloc[4]["end"] == pytest.approx(57.3)  # still adds up to RMSD
+    assert "agrees" not in text and f"add up to {al.fmt_watts(57.3)} W; RMSD(A,B) is {al.fmt_watts(57.3)} W." in text
+
+
+def test_a_pair_that_differs_at_one_stage_shows_the_normal_table_and_the_note(thesis):
+    run, inputs = thesis
+    phase1 = copy.deepcopy(_stored_phase1(run, inputs))
+    phase1["A-B"]["differing_stages"] = ["TEMPERATURE"]
+    entry = _phase3_entry([0.0, 0.0, 73.88, 0.0, 0.0])
+    at = _open_with(run, inputs, phase1, {"A-B": entry})
+    text = _text(at)
+    assert wording.ONE_STAGE_NOTE in text
+    assert "73.88" in text and text.count(wording.SAME_MODEL) == 4  # the one stage that differs carries it all
+    assert al.phase3_views(phase1, {"A-B": entry})[0].one_stage is True
+
+
+def test_the_note_is_not_shown_when_more_than_one_stage_differs(thesis):
+    run, inputs = thesis
+    phase1 = _stored_phase1(run, inputs)
+    at = _open_with(run, inputs, phase1, {"A-B": _phase3_entry([17.52, 6.10, 50.23, 0.02, 0.0])})
+    assert wording.ONE_STAGE_NOTE not in _text(at)
+
+
+def test_a_real_pair_that_differs_at_exactly_one_stage_is_a_result_with_the_note():
+    _clean()
+    inputs = _inputs_with_tau(0.01)
+    inputs["pipelines"]["B"] = {**inputs["pipelines"]["A"], "temperature": "pvsyst_cell"}  # B differs from A only here
+    run = rl.run_pipelines(inputs, "p4-page")
+    ss = _session(run, inputs, "p4-page")
+    phase1 = al.run_phase1(ss)
+    assert phase1["A-B"]["differing_stages"] == ["TEMPERATURE"] and phase1["A-B"]["outcome"] in (2, 3)
+    phase3 = al.run_phase3(ss)
+    entry = phase3["A-B"]
+    assert entry["status"] == "ran"  # nothing is hidden because only one stage differs
+    phi = {item["stage"]: item["value"] for item in entry["phi_final"]}
+    assert phi["TEMPERATURE"] == pytest.approx(entry["rmsd_ab"], abs=1e-6)  # the whole difference sits in that stage
+    assert all(phi[s] == 0.0 for s in ("DECOMPOSITION", "TRANSPOSITION", "DC", "AC"))
+    at = _open(run, inputs, phase1=phase1, phase1_done=True, has_k=True, phase3=phase3)
+    assert wording.ONE_STAGE_NOTE in _text(at)
+
+
+def test_a_pair_that_cannot_be_decomposed_shows_its_reason_and_no_numbers(thesis):
+    run, inputs = thesis
+    phase1 = _stored_phase1(run, inputs)
+    entry = {"status": "not computable", "reason": "not computable — DC/AC hybrid invalidity",
+             "invalid_coalitions": ["DC+AC", "TEMPERATURE+DC+AC"]}
+    at = _open_with(run, inputs, phase1, {"A-B": entry})
+    text = _text(at)
+    assert wording.NOT_COMPUTABLE_HYBRID in text and "2 of the stage combinations cannot be run" in text
+    assert "φ final (W)" not in text and len(_chart_frames(at)) == 2  # no table, no waterfall
+
+
+def test_outcome_1_pairs_are_settled_by_phase_1_and_shown_without_pressing_phase_3():
+    run, inputs = _fresh_run(tau=0.5)
+    at = _open(run, inputs)
+    at.button(key="w4_p1").click().run()
+    assert wording.PHASE3_OUTCOME_1 in _text(at) and at.button(key="w4_p3").disabled
+    for key in ("A-C", "B-C"):
+        at.get("button_group")[1].set_value(key)
+        at.run()
+        assert wording.PHASE3_OUTCOME_1 in _text(at)
+
+
+def test_with_a_mix_the_outcome_1_pair_is_settled_and_the_others_wait_for_the_press(thesis):
+    run, inputs = thesis
+    phase1 = _stored_phase1(run, inputs)
+    settled = {"B-C": phase3_pair_to_dict(NOT_RUN_OUTCOME_1)}
+    at = _open_with(run, inputs, phase1, settled)
+    assert not at.button(key="w4_p3").disabled
+    assert wording.P4_P3_PENDING in _text(at)  # A–B waits for the button
+    at.get("button_group")[1].set_value("B-C")
+    at.run()
+    assert wording.PHASE3_OUTCOME_1 in _text(at)
+
+
+def test_a_pair_that_failed_its_checks_shows_the_reason_as_stored(thesis):
+    run, inputs = thesis
+    phase1 = copy.deepcopy(_stored_phase1(run, inputs))
+    phase1["A-C"] = {"status": "not computable", "reason": "not computable — pipeline A failed dc"}
+    phase3 = {"A-C": {"status": "not run", "reason": "not computable — pipeline A failed dc"}}
+    at = _open_with(run, inputs, phase1, phase3)
+    at.get("button_group")[1].set_value("A-C")
+    at.run()
+    assert "Not computable — pipeline A failed dc" in _text(at)
+
+
+def test_choosing_a_pair_to_view_computes_nothing(thesis, monkeypatch):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    phase3 = al.run_phase3(ss)
+    at = _open_with(run, inputs, phase1, phase3)
+
+    def refuse(*args, **kwargs):
+        pytest.fail("a selector change computed something")
+
+    monkeypatch.setattr(al, "step_phase3", refuse)
+    monkeypatch.setattr(al, "step_disagreement_check", refuse)
+    for key in ("A-C", "B-C", "A-B"):
+        at.get("button_group")[1].set_value(key)
+        at.run()
+        assert not at.exception
+
+
+def test_the_phase_3_page_has_tooltips_and_no_signed_column_hash_or_banned_word(thesis):
+    run, inputs = thesis
+    ss = _session(run, inputs, "p4-thesis")
+    phase1 = al.run_phase1(ss)
+    at = _open_with(run, inputs, phase1, al.run_phase3(ss))
+    markup = " ".join(el.value for el in at.get("html"))
+    for hint in (wording.HELP_PHI, wording.HELP_SHARE):
+        assert html.escape(hint) in markup
+    text = _text(at).lower()
+    assert not HEX.findall(text) and not re.search(r"\bsigned\b", text)
+    for word in ("recommend", "suggest", "optimal", "improv", "best", "error", "compensat", "winner", "rank"):
+        assert word not in text, word
+    assert not re.search(r"\bcorrect", text)
+    assert text.index("φ a→b") < text.index("φ b→a") < text.index("φ final")

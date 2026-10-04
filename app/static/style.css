@@ -568,3 +568,6 @@ div.st-key-card_heat, div.st-key-card_stage { gap: 12px; }
 .pv-method { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.6; }
 .pv-full td, .pv-full th { font-size: 12px; white-space: nowrap; }
 .pv-full td:not(:nth-child(-n+3)) { text-align: right; }
+div.st-key-card_p2 { gap: 12px; }
+div.st-key-card_p3, div.st-key-card_p3_chart { gap: 12px; }
+.pv-same { text-align: center; color: var(--pv-text-2); font-size: 13px; }

@@ -331,11 +331,216 @@ def run_phase1(ss: Any, progress: Callable[[str], None] | None = None) -> dict[s
     return phase1
 
 
+
+# --- Phase 2: propagation profile --------------------------------------------------------------------------------
+
+
+def fmt_signed(value: float | None) -> str:
+    """A number that can be negative, with a true minus sign (not a hyphen)."""
+    if value is None:
+        return wording.P4_NA
+    text = f"{abs(value):.4f}"
+    return f"{wording.P4_MINUS}{text}" if value < 0 else text
+
+
+@dataclass(frozen=True)
+class Phase2View:
+    """The Phase 2 numbers, read from the stored dict in stage order. Both the chart and the table read these."""
+
+    ran: bool
+    reason: str | None
+    pair_labels: list[str]
+    pairs: dict[str, dict[str, float]]  # pair key -> stage -> nRMSD
+    mean: dict[str, float]
+    max: dict[str, float]
+    delta: dict[str, float]
+
+
+def _by_stage(items: list[dict]) -> dict[str, float]:
+    return {item["stage"].lower(): item["value"] for item in items}
+
+
+def phase2_view(phase2: dict) -> Phase2View:
+    """The stored Phase 2 dict as numbers by stage; a 'not run' dict gives its reason."""
+    if phase2.get("status") != "ran":
+        reason = phase2_blocked_reason(phase2) or phase2.get("reason", "")
+        return Phase2View(False, reason, [], {}, {}, {}, {})
+    pairs = {pair_key(tuple(item["pair"])): _by_stage(item["nrmsd"]) for item in phase2["pair_nrmsd"]}
+    keys = [pair_key(pair) for pair in PAIRS if pair_key(pair) in pairs]  # fixed order, whatever order was stored
+    return Phase2View(
+        True, None, keys, {key: pairs[key] for key in keys},
+        _by_stage(phase2["mean_nrmsd"]), _by_stage(phase2["max_nrmsd"]), _by_stage(phase2["delta"]),
+    )
+
+
+def phase2_rows(view: Phase2View) -> list[dict[str, Any]]:
+    """The table under the chart: one row per stage, the three pairs' values then mean, max and Δ."""
+    return [
+        {
+            "stage": stage,
+            "label": wording.P4_HEAT_AXIS[index],
+            "pairs": [fmt_nrmsd(view.pairs[key][stage]) for key in view.pair_labels],
+            "mean": fmt_nrmsd(view.mean[stage]),
+            "max": fmt_nrmsd(view.max[stage]),
+            "delta": fmt_signed(view.delta[stage]),
+        }
+        for index, stage in enumerate(STAGES)
+    ]
+
+
+def run_phase2(ss: Any, progress: Callable[[str], None] | None = None) -> dict:
+    """Phase 2 on its button. It computes nothing new: step_phase2 re-reads the Phase 1 values, which are
+    rebuilt from the stored dicts, so no live pipelines are needed. Saved with the shape the command line stores."""
+    say = progress or (lambda _text: None)
+    say(wording.P4_P2_PROGRESS_READ)
+    results = phase1_results_from(ss["phase1"])
+    phase2 = phase2_to_dict(step_phase2(results), results)
+    say(wording.P4_P2_PROGRESS_SAVE)
+    save_sections(
+        ss["analysis_id"], ss["name"] or ss["inputs"]["name"], "phase2_done", ss["inputs"], phase2=phase2
+    )
+    ss["phase2"] = phase2
+    return phase2
+
+
+# --- Phase 3: contribution of each stage to the final AC gap --------------------------------------------------------
+
+
+PHI_UNIT = run_logic.column_info("p_ac")[1]  # φ is in the unit of AC power, from the one column table
+
+
+def fmt_watts(value: float | None) -> str:
+    """Two decimals with a true minus sign for a negative value; nothing else is said about the sign."""
+    if value is None:
+        return wording.P4_NA
+    text = f"{abs(value):.2f}"
+    return f"{wording.P4_MINUS}{text}" if value < 0 and round(abs(value), 2) != 0 else text
+
+
+def fmt_share(value: float | None) -> str:
+    if value is None:
+        return wording.P4_NA
+    text = f"{abs(value):.3f}"
+    return f"{wording.P4_MINUS}{text}" if value < 0 and round(abs(value), 3) != 0 else text
+
+
+@dataclass(frozen=True)
+class Phase3Row:
+    stage: str
+    label: str
+    same_model: bool
+    phi_ab: float
+    phi_ba: float
+    phi_final: float
+    share: float | None
+
+
+@dataclass(frozen=True)
+class Phase3View:
+    """One pair's stored Phase 3 entry, in stage order. The table, the efficiency line and the waterfall all
+    read these values, so the same number is never worked out twice."""
+
+    pair: tuple[str, str]
+    state: str  # "ran", "outcome 1", "not computable", "not run", "pending"
+    message: str | None
+    rows: list[Phase3Row]
+    rmsd_ab: float | None
+    total: float | None  # the stages' φ final added up
+    one_stage: bool
+    share_defined: bool
+
+
+def efficiency(view: Phase3View) -> tuple[float, float, bool]:
+    """(sum of φ final, RMSD(A,B), whether they agree): the efficiency property, read from the stored values."""
+    total, rmsd = view.total or 0.0, view.rmsd_ab or 0.0
+    return total, rmsd, abs(total - rmsd) <= 1e-6 * max(1.0, abs(rmsd))
+
+
+def phase3_view(pair: tuple[str, str], entry: dict | None, differing: frozenset[str]) -> Phase3View:
+    """What the page shows for one pair. A pair with no stored entry is 'pending' (eligible, not yet run)
+    or, if Phase 1 settled it, shows that reason."""
+    if entry is None:
+        return Phase3View(pair, "pending", wording.P4_P3_PENDING, [], None, None, False, True)
+    status = entry.get("status")
+    if status == "not run":
+        text = outcome_one_text(entry)
+        return Phase3View(
+            pair, "outcome 1" if text else "not run", text or not_computable_text(entry["reason"]),
+            [], None, None, False, True,
+        )
+    if status == "not computable":
+        n = len(entry.get("invalid_coalitions") or [])
+        message = wording.NOT_COMPUTABLE_HYBRID + (f". {wording.P4_P3_INVALID_COUNT.format(n=n)}" if n else "")
+        return Phase3View(pair, "not computable", message, [], None, None, False, True)
+    by = {key: _by_stage(entry[key]) for key in ("phi_ab", "phi_ba", "phi_final")}
+    shares = _by_stage(entry["share"]) if entry.get("share") else {}
+    rows = [
+        Phase3Row(
+            stage, wording.C_STAGE_LABELS[stage], stage not in differing, by["phi_ab"][stage], by["phi_ba"][stage],
+            by["phi_final"][stage], shares.get(stage),
+        )
+        for stage in STAGES
+    ]
+    return Phase3View(
+        pair, "ran", None, rows, entry["rmsd_ab"], sum(row.phi_final for row in rows),
+        len(differing) == 1, bool(shares),
+    )
+
+
+def phase3_views(phase1: dict[str, dict], phase3: dict | None) -> list[Phase3View]:
+    """One view per pair in the fixed order A-B, A-C, B-C."""
+    phase3 = phase3 or {}
+    out = []
+    for pair in PAIRS:
+        entry1 = phase1[pair_key(pair)]
+        differing = frozenset(n.lower() for n in entry1.get("differing_stages", []))
+        if entry1.get("status") != "ran" and pair_key(pair) not in phase3:
+            out.append(Phase3View(pair, "not run", not_computable_text(entry1["reason"]), [], None, None, False, True))
+            continue
+        out.append(phase3_view(pair, phase3.get(pair_key(pair)), differing))
+    return out
+
+
+def phase3_done(phase1: dict[str, dict], phase3: dict | None) -> bool:
+    """True when every pair Phase 3 computes has its entry."""
+    eligible = phase3_eligible(phase1)
+    return bool(eligible) and all(pair_key(pair) in (phase3 or {}) for pair in eligible)
+
+
+def run_phase3(ss: Any, progress: Callable[[str], None] | None = None) -> dict:
+    """Phase 3 on its button: every eligible pair (outcome 2 or 3), one pair at a time with a message each,
+    saving after each. The live pipelines come from the run just made, or are rebuilt from the stored inputs.
+    Derived runs are recorded by the step function, so a second press adds no rows."""
+    say = progress or (lambda _text: None)
+    run = ss["run"]
+    pairs = phase3_eligible(ss["phase1"])
+    if not pairs:
+        return ss.get("phase3") or {}
+    if run.live is None:
+        say(wording.P4_PROGRESS_REBUILD)
+        run.live = run_logic.rebuild_live(ss["inputs"], ss["analysis_id"], say)
+    live = run.live
+    results = phase1_results_from(ss["phase1"])
+    stored = (load_analysis(ss["analysis_id"]) or {}).get("phase3") or {}
+    # what Phase 1 settles, what is already stored, and what the session holds; nothing is dropped
+    phase3 = {**derived_states(live, results)[1], **stored, **(ss.get("phase3") or {})}
+    name = ss["name"] or ss["inputs"]["name"]
+    for index, pair in enumerate(pairs, start=1):
+        say(wording.P4_P3_PROGRESS_PAIR.format(pair=pair_label(pair), i=index, n=len(pairs)))
+        out = step_phase3(live.pipelines, {pair: results[pair]}, live.hardware, live.site_result.ctx, live.defaults, ss["analysis_id"])
+        phase3[pair_key(pair)] = phase3_pair_to_dict(out[pair])
+        save_sections(ss["analysis_id"], name, "phase3_done", ss["inputs"], phase3=phase3)
+        ss["phase3"] = phase3
+    say(wording.P4_P3_PROGRESS_SAVE)
+    return phase3
+
+
 __all__ = [
     "PAIRS",
     "AnalysisError",
     "KBand",
     "PairView",
+    "Phase2View",
     "derived_states",
     "has_k",
     "k_band",
@@ -343,7 +548,14 @@ __all__ = [
     "phase1_from_dict",
     "phase1_results_from",
     "phase1_view",
+    "phase2_rows",
+    "phase2_view",
+    "phase3_done",
+    "phase3_view",
+    "phase3_views",
     "run_phase1",
+    "run_phase2",
+    "run_phase3",
     "save_sections",
     "stage_rows",
     "tau_of",

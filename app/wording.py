@@ -599,7 +599,6 @@ P4_P3_BUTTON = "Run Phase 3 — Contribution"
 P4_P3_CAPTION = "Each stage's share of the final gap"
 P4_LOCKED = "Phase 2 and Phase 3 unlock after Phase 1 has run — they use its results."
 P4_RAN = "Done · running again gives the same values."
-P4_COMING = "This part of the page arrives in the next step of the build."
 P4_PROGRESS_TITLE = "Running Phase 1"
 P4_PROGRESS_REBUILD = "Rebuilding the pipelines from the stored inputs"
 P4_PROGRESS_COMPARE = "Comparing the pipelines stage by stage"
@@ -657,3 +656,55 @@ P4_FULL_UNITLESS = "–"
 P4_PHI_NEGATIVE = "φ can be negative. The stages still add up to RMSD(A,B)."
 P4_PHASE2_NOT_RUN_FAILED = "not run — a pipeline failed its checks"
 P4_DERIVED_NOTE = "Shown from Phase 1: nothing to run."
+
+# --- Page 4 · Phase 2 -----------------------------------------------------------------------------------
+P4_P2_TITLE = "Propagation profile · nRMSD by stage"
+P4_P2_SUB = (
+    "Phase 2 reads the Phase 1 values of all three pairs: one line per pair, with τ = {tau} drawn as a horizontal line."
+)
+P4_P2_PROGRESS_TITLE = "Running Phase 2"
+P4_P2_PROGRESS_READ = "Reading the Phase 1 values of the three pairs"
+P4_P2_PROGRESS_SAVE = "Saving the Phase 2 result"
+P4_P2_FAILED = "Phase 2 could not finish ({detail})."
+P4_P2_COL_MEAN = "Mean"
+P4_P2_COL_MAX = "Max"
+P4_P2_COL_DELTA = "Δ"
+P4_P2_NOTE = "Across the three pairs. Δ = change in the mean from the previous stage."
+P4_P2_DEFS = (
+    ("Mean", "The average of the three pairs' nRMSD at a stage."),
+    ("Max", "The largest of the three pairs' nRMSD at a stage."),
+    ("Δ", "The change in the mean from the previous stage; the first stage is compared with 0."),
+)
+P4_P2_CHART_ALT = (
+    "Line chart of nRMSD by stage for the pairs A–B, A–C and B–C, with a horizontal line at τ. "
+    "A–B is a solid line with diamonds, A–C dashed with crosses, B–C dash-dotted with triangles."
+)
+P4_P2_NOT_RUN_TITLE = "Phase 2"
+P4_P2_STAGE = "Stage"
+P4_MINUS = "−"
+
+# --- Page 4 · Phase 3 -----------------------------------------------------------------------------------
+P4_P3_PICK = "Pair"
+P4_P3_TITLE = "Contribution to the final AC gap · {pair}"
+P4_P3_SUB = "Stages in pipeline order"
+P4_P3_COL_PHI = "φ {a}→{b} ({unit})"
+P4_P3_COL_PHI_FINAL = "φ final ({unit})"
+P4_P3_COL_SHARE = "Share"
+P4_P3_SHARE_UNDEFINED = "not defined: RMSD is 0"
+P4_P3_EFF = "Efficiency check: the stages' φ final add up to {total} {unit}; RMSD({a},{b}) is {rmsd} {unit}."
+P4_P3_EFF_DIFF = "They differ by {diff} {unit}."
+P4_P3_WATERFALL_TITLE = "How the final AC gap builds up · {pair}"
+P4_P3_WATERFALL_SUB = "Each stage adds its φ final; the stages sum to RMSD({a},{b})."
+P4_P3_TOTAL_BAR = "RMSD({a},{b})"
+P4_P3_BAR_SAME = "same model"
+P4_P3_AXIS = "Contribution ({unit})"
+P4_P3_ALT = (
+    "Waterfall chart: one bar per stage, each starting where the previous one ended, and a final bar for "
+    "RMSD({a},{b}). Every bar carries its value."
+)
+P4_P3_PENDING = "Not run yet. Press Run Phase 3 to attribute the final AC difference of this pair."
+P4_P3_INVALID_COUNT = "{n} of the stage combinations cannot be run, so no value is given."
+P4_P3_PROGRESS_TITLE = "Running Phase 3"
+P4_P3_PROGRESS_PAIR = "Attributing the final AC difference for {pair} ({i} of {n}). This takes a few seconds."
+P4_P3_PROGRESS_SAVE = "Saving the Phase 3 result"
+P4_P3_FAILED = "Phase 3 could not finish ({detail})."

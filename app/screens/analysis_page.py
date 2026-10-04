@@ -15,6 +15,7 @@ from app import analysis_charts, analysis_logic, components, gating, run_logic, 
 from pvdials.analysis import AnalysisError
 
 PAIR_KEY = "w4_pair"
+P3_PAIR_KEY = "w4_p3pair"
 LABELS = run_logic.LABELS
 
 
@@ -65,6 +66,40 @@ def _run_phase1(ss) -> None:
     st.rerun()  # the sidebar was drawn before this phase finished; draw the page again so it shows the new state
 
 
+def _run_phase2(ss) -> None:
+    with st.status(wording.P4_P2_PROGRESS_TITLE, expanded=True) as box:
+
+        def say(text: str) -> None:
+            box.update(label=text)
+            st.write(text)
+
+        try:
+            analysis_logic.run_phase2(ss, say)
+        except (AnalysisError, KeyError, ValueError) as exc:
+            box.update(label=wording.P4_P2_PROGRESS_TITLE, state="complete")
+            ss["p2_problem"] = wording.P4_P2_FAILED.format(detail=str(exc).split("failed:")[-1].strip().rstrip("."))
+            return
+        box.update(label=wording.R_PROGRESS_DONE, state="complete", expanded=False)
+    ss.pop("p2_problem", None)
+
+
+def _run_phase3(ss) -> None:
+    with st.status(wording.P4_P3_PROGRESS_TITLE, expanded=True) as box:
+
+        def say(text: str) -> None:
+            box.update(label=text)
+            st.write(text)
+
+        try:
+            analysis_logic.run_phase3(ss, say)
+        except (AnalysisError, KeyError, ValueError) as exc:
+            box.update(label=wording.P4_P3_PROGRESS_TITLE, state="complete")
+            ss["p3_problem"] = wording.P4_P3_FAILED.format(detail=str(exc).split("failed:")[-1].strip().rstrip("."))
+            return
+        box.update(label=wording.R_PROGRESS_DONE, state="complete", expanded=False)
+    ss.pop("p3_problem", None)
+
+
 # --- Pieces of the page -----------------------------------------------------------------------------------
 
 
@@ -81,16 +116,25 @@ def _buttons(ss, phase1: dict | None) -> None:
             on_click=_request(1), disabled=bool(ss.get("pending")),
         )
         st.html(f'<p class="pv-btn-note">{escape(wording.P4_RAN if done else wording.P4_P1_CAPTION)}</p>')
-    blocked2 = analysis_logic.phase2_blocked_reason(ss.get("phase2")) if done else None
+    phase2 = ss.get("phase2") if isinstance(ss.get("phase2"), dict) else None
+    blocked2 = analysis_logic.phase2_blocked_reason(phase2) if done else None
     blocked3 = analysis_logic.phase3_blocked_reason(phase1) if done else None
-    for column, label, caption, blocked, key in (
-        (columns[1], wording.P4_P2_BUTTON, wording.P4_P2_CAPTION, blocked2, "w4_p2"),
-        (columns[2], wording.P4_P3_BUTTON, wording.P4_P3_CAPTION, blocked3, "w4_p3"),
-    ):
-        with column:
-            st.button(label, key=key, disabled=True)  # Phase 2 and 3 are wired in the next parts
-            note = blocked or (wording.P4_COMING if done else caption)
-            st.html(f'<p class="pv-btn-note">{escape(note)}</p>')
+    with columns[1]:
+        st.button(
+            wording.P4_P2_BUTTON, key="w4_p2", type="secondary", on_click=_request(2),
+            disabled=not done or blocked2 is not None or bool(ss.get("pending")),
+        )
+        ran2 = phase2 is not None and phase2.get("status") == "ran"
+        note2 = blocked2 or (wording.P4_RAN if ran2 else wording.P4_P2_CAPTION)
+        st.html(f'<p class="pv-btn-note">{escape(note2)}</p>')
+    with columns[2]:
+        st.button(
+            wording.P4_P3_BUTTON, key="w4_p3", type="secondary", on_click=_request(3),
+            disabled=not done or blocked3 is not None or bool(ss.get("pending")),
+        )
+        finished3 = done and analysis_logic.phase3_done(phase1, ss.get("phase3") if isinstance(ss.get("phase3"), dict) else None)
+        note3 = blocked3 or (wording.P4_RAN if finished3 else wording.P4_P3_CAPTION)
+        st.html(f'<p class="pv-btn-note">{escape(note3)}</p>')
     if not done:
         st.html(f'<p class="pv-note-line">{escape(wording.P4_LOCKED)}</p>')
 
@@ -195,6 +239,124 @@ def _stage_card(ss, views, tau: dict) -> None:
         st.html(f'<p class="pv-note-line">{escape(wording.P4_UNITLESS.format(tau=analysis_logic.tau_text(tau)))}</p>')
 
 
+def _phase2_table(view, rows) -> str:
+    pair_heads = "".join(f"<th class='pv-num'>{escape(wording.P4_PAIR.format(a=k[0], b=k[2]))}</th>" for k in view.pair_labels)
+    body = "".join(
+        f"<tr><td>{escape(row['label'])}</td>"
+        + "".join(f"<td class='pv-num pv-mono'>{escape(text)}</td>" for text in (*row["pairs"], row["mean"], row["max"], row["delta"]))
+        + "</tr>"
+        for row in rows
+    )
+    return (
+        '<table class="pv-stage-table"><thead><tr>'
+        f"<th>{escape(wording.P4_P2_STAGE)}</th>{pair_heads}"
+        f"<th class='pv-num'>{escape(wording.P4_P2_COL_MEAN)}</th><th class='pv-num'>{escape(wording.P4_P2_COL_MAX)}</th>"
+        f"<th class='pv-num'>{escape(wording.P4_P2_COL_DELTA)}</th></tr></thead><tbody>{body}</tbody></table>"
+        f'<p class="pv-note-line" style="margin-top:8px">{escape(wording.P4_P2_NOTE)}</p>'
+    )
+
+
+def _phase2_section(ss, phase1: dict) -> None:
+    phase2 = ss.get("phase2") if isinstance(ss.get("phase2"), dict) else None
+    if phase2 is None:
+        return
+    view = analysis_logic.phase2_view(phase2)
+    tau = analysis_logic.tau_of(phase1, ss["inputs"].get("tau"))
+    with st.container(key="card_p2"):
+        if not view.ran:
+            components.card_title(wording.P4_P2_NOT_RUN_TITLE)
+            components.message("todo", view.reason or "", False)
+            return
+        components.card_title(wording.P4_P2_TITLE, wording.P4_P2_SUB.format(tau=analysis_logic.tau_text(tau)))
+        st.altair_chart(
+            analysis_charts.propagation_chart(view, tau["value"], analysis_logic.tau_text(tau)), width="stretch"
+        )
+        st.html(f'<p class="pv-sr-only">{escape(wording.P4_P2_CHART_ALT)}</p>')
+        st.html(_phase2_table(view, analysis_logic.phase2_rows(view)))
+
+
+def _phase3_table(view, tip_phi: str) -> str:
+    a, b = view.pair
+    unit = analysis_logic.PHI_UNIT
+    head = (
+        f"<th>{escape(wording.P4_COL_STAGE)}</th>"
+        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI.format(a=a, b=b, unit=unit), tip_phi)}</th>"
+        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI.format(a=b, b=a, unit=unit), tip_phi)}</th>"
+        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI_FINAL.format(unit=unit), tip_phi)}</th>"
+        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_SHARE, wording.HELP_SHARE)}</th>"
+    )
+    body = []
+    for row in view.rows:
+        if row.same_model:  # the stored value stays 0.0; the page says why there is nothing to show
+            body.append(
+                f"<tr><td>{escape(row.label)}</td>"
+                f"<td colspan='4' class='pv-same'>{escape(wording.SAME_MODEL)}</td></tr>"
+            )
+            continue
+        share = analysis_logic.fmt_share(row.share) if view.share_defined else wording.P4_P3_SHARE_UNDEFINED
+        body.append(
+            f"<tr><td>{escape(row.label)}</td>"
+            + "".join(
+                f"<td class='pv-num pv-mono'>{escape(text)}</td>"
+                for text in (
+                    analysis_logic.fmt_watts(row.phi_ab), analysis_logic.fmt_watts(row.phi_ba),
+                    analysis_logic.fmt_watts(row.phi_final), share,
+                )
+            )
+            + "</tr>"
+        )
+    return f'<table class="pv-stage-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
+
+
+def _efficiency_line(view) -> None:
+    a, b = view.pair
+    total, rmsd, agrees = analysis_logic.efficiency(view)
+    unit = analysis_logic.PHI_UNIT
+    text = wording.P4_P3_EFF.format(
+        total=analysis_logic.fmt_watts(total), a=a, b=b, rmsd=analysis_logic.fmt_watts(rmsd), unit=unit
+    )
+    if not agrees:
+        text += " " + wording.P4_P3_EFF_DIFF.format(diff=analysis_logic.fmt_watts(abs(total - rmsd)), unit=unit)
+    components.message("ok" if agrees else "warn", text, False)
+
+
+def _phase3_section(ss, phase1: dict) -> None:
+    phase3 = ss.get("phase3") if isinstance(ss.get("phase3"), dict) else None
+    views = analysis_logic.phase3_views(phase1, phase3)
+    if all(view.state in ("pending",) for view in views) and not phase3:
+        return  # nothing to show yet: Phase 3 has not been run and Phase 1 settled none of the pairs
+    keys = [analysis_logic.pair_key(view.pair) for view in views]
+    if ss.get(P3_PAIR_KEY) not in keys:
+        shown = next((v for v in views if v.state == "ran"), views[0])
+        ss[P3_PAIR_KEY] = ss["w4_prev"].get(P3_PAIR_KEY) if ss["w4_prev"].get(P3_PAIR_KEY) in keys else analysis_logic.pair_key(shown.pair)
+    with st.container(key="card_p3"):
+        head, picker = st.columns([2, 3])
+        with head:
+            components.card_title(wording.P4_P3_TITLE.format(pair=analysis_logic.pair_label(next(v.pair for v in views if analysis_logic.pair_key(v.pair) == ss[P3_PAIR_KEY]))), wording.P4_P3_SUB)
+        with picker:
+            st.segmented_control(
+                wording.P4_P3_PICK, keys, key=P3_PAIR_KEY, selection_mode="single",
+                format_func=lambda key: wording.P4_PAIR.format(a=key[0], b=key[2]),
+            )
+        view = next(v for v in views if analysis_logic.pair_key(v.pair) == ss[P3_PAIR_KEY])
+        if view.state != "ran":
+            components.message("todo", view.message or "", False)
+            return
+        st.html(_phase3_table(view, wording.HELP_PHI))
+        if view.one_stage:
+            components.message("todo", wording.ONE_STAGE_NOTE, False)
+        _efficiency_line(view)
+    if view.state == "ran":
+        a, b = view.pair
+        with st.container(key="card_p3_chart"):
+            components.card_title(
+                wording.P4_P3_WATERFALL_TITLE.format(pair=analysis_logic.pair_label(view.pair)),
+                wording.P4_P3_WATERFALL_SUB.format(a=a, b=b),
+            )
+            st.altair_chart(analysis_charts.waterfall(view), width="stretch")
+            st.html(f'<p class="pv-sr-only">{escape(wording.P4_P3_ALT.format(a=a, b=b))}</p>')
+
+
 def _zenith(run: run_logic.RunState) -> float | None:
     return next(
         (r["site"].get("daylight_mask_zenith_max_deg") for r in run.provenance.get("records", []) if r.get("site")),
@@ -209,6 +371,7 @@ def _details(run: run_logic.RunState, views) -> None:
             (wording.TAU, wording.HELP_TAU),
             ("k", wording.HELP_K),
             *(("", line) for line in wording.P4_DEF_OUTCOMES),
+            *wording.P4_P2_DEFS,
             ("φ", wording.HELP_PHI),
             ("", wording.P4_PHI_NEGATIVE),
             ("Share", wording.HELP_SHARE),
@@ -246,6 +409,8 @@ def _phase1_section(ss, run: run_logic.RunState, phase1: dict) -> None:
     if any(view.computable for view in views):
         _heat_card(views, tau)
         _stage_card(ss, views, tau)
+    _phase2_section(ss, phase1)
+    _phase3_section(ss, phase1)
     _details(run, views)
 
 
@@ -261,13 +426,18 @@ def render() -> None:
     if ss.pop("w4_run_p1", False) and not ss.get("pending"):
         _run_phase1(ss)
     phase1 = _phase1(ss)
+    if ss.pop("w4_run_p2", False) and phase1 is not None and not ss.get("pending"):
+        _run_phase2(ss)
+    if ss.pop("w4_run_p3", False) and phase1 is not None and not ss.get("pending"):
+        _run_phase3(ss)
 
     st.page_link(components.PAGES["3"], label=wording.P4_VIEW_RUN)
     _buttons(ss, phase1)
-    if ss.get("p1_problem"):
-        components.show_problem(ss["p1_problem"])
+    for problem in ("p1_problem", "p2_problem", "p3_problem"):
+        if ss.get(problem):
+            components.show_problem(ss[problem])
     if phase1 is None:
         _empty()
     else:
         _phase1_section(ss, run, phase1)
-    ss["w4_prev"] = {PAIR_KEY: ss.get(PAIR_KEY)}
+    ss["w4_prev"] = {PAIR_KEY: ss.get(PAIR_KEY), P3_PAIR_KEY: ss.get(P3_PAIR_KEY)}
