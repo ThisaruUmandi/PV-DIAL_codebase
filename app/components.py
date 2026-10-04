@@ -128,6 +128,11 @@ def field_label(text: str, tag: str | None = None, hint: str | None = None, stac
     )
 
 
+def over_tau_mark() -> str:
+    """The one look for 'over τ': an outlined tag in plain ink, on one line. 'Within τ' has no mark at all."""
+    return f'<span class="pv-over">{escape(wording.P4_OVER_TAU)}</span>'
+
+
 def message_html(kind: str, text: str, boxed: bool = True) -> str:
     """Icon + words: tick (ok), warning (warn), cross (bad). Colour only adds to it."""
     glyph = {"ok": "ok", "warn": "warn", "bad": "bad", "todo": "todo"}[kind]

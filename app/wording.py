@@ -46,6 +46,11 @@ STAGE_NAMES = {
     "DC": "DC power",
     "AC": "AC conversion",
 }
+STAGE_KEYS = ("decomposition", "transposition", "temperature", "dc", "ac")
+# the one set, by lower-case key; every other list of stage names on any page is built from it
+STAGE_NAME = {key: STAGE_NAMES[key.upper()] for key in STAGE_KEYS}
+STAGE_NUMBERED = {key: f"{index} · {STAGE_NAME[key]}" for index, key in enumerate(STAGE_KEYS, start=1)}
+STAGE_NAME_LIST = tuple(STAGE_NAME[key] for key in STAGE_KEYS)
 PAIR_ORDER = ("A-B", "A-C", "B-C")
 
 # --- Outcomes (KT section C) ---------------------------------------------------------
@@ -173,7 +178,7 @@ def clears_message(first_step: int) -> str:
 
 # --- Home layout and sidebar chrome (labels from the Main mock-up) -----------------------
 STAGES_COMPARED = "Stages compared"
-STAGE_PILLS = ("Decomposition", "Transposition", "Cell temperature", "DC", "AC")
+STAGE_PILLS = STAGE_NAME_LIST
 HOME_CARD_SHOWS = "What the analysis shows"
 HOME_CARD_BEFORE = "Before you start"
 RECENT_ANALYSES = "Recent analyses"
@@ -352,13 +357,7 @@ N_HEIGHT = "module height"
 # --- Page 2 · Pipeline configuration ---------------------------------------------------------------
 C_INTRO = "One model per stage for each pipeline. Lists come from the pool for this module, in pool order."
 C_COLUMN = "Pipeline {label}"
-C_STAGE_LABELS = {
-    "decomposition": "1 · Decomposition",
-    "transposition": "2 · Transposition",
-    "temperature": "3 · Cell temperature",
-    "dc": "4 · DC power",
-    "ac": "5 · AC conversion",
-}
+C_STAGE_LABELS = STAGE_NUMBERED
 C_STAGE_HEADER = "Stage"
 C_DIFFERS = "Differs across pipelines"
 C_CHOOSE = "Choose a model"
@@ -458,13 +457,7 @@ R_PERIOD = "Period"
 R_PERIODS = {"day": "One day", "week": "One week", "month": "One month", "year": "Full year"}
 R_DATE = "Date"
 R_DATE_HELP = "The day, or the week or the month that contains this date."
-R_STAGE_SHORT = {
-    "decomposition": "Decomposition",
-    "transposition": "Transposition",
-    "temperature": "Cell temperature",
-    "dc": "DC power",
-    "ac": "AC power",
-}
+R_STAGE_SHORT = STAGE_NAME
 R_CHART_ALT = "Chart of the selected stage for pipelines A, B and C. A is a solid line with circles, B dashed with squares, C dotted with triangles."
 R_TABLE_WINDOW = "In the period shown"
 R_TOTAL_IRRADIATION = "Irradiation (kWh/m²)"
@@ -544,13 +537,7 @@ R_LINEAGE_STATEMENT = "{stage} ({model}) used {used} and produced {produced}, {r
 R_LINEAGE_NO_WEATHER_LINK = (
     "This stage also reads air temperature and wind speed from the weather file. The record does not carry that link."
 )
-R_LINEAGE_STAGE_NAMES = {
-    "decomposition": "Decomposition",
-    "transposition": "Transposition",
-    "temperature": "Cell temperature",
-    "dc": "DC power",
-    "ac": "AC power",
-}
+R_LINEAGE_STAGE_NAMES = STAGE_NAME
 # plain names for stored settings; a key that is not here is shown as stored. A unit appears only
 # where the stored key carries one (its suffix).
 SETTING_LABELS = {
@@ -591,7 +578,7 @@ R_IDS_STAGE_HASH = "{stage} output"
 # --- Page 4 · Analysis --------------------------------------------------------------------------------
 P4_VIEW_RUN = "View run provenance"
 P4_PAIR = "{a} – {b}"
-P4_P1_BUTTON = "Run Phase 1 — Localization"
+P4_P1_BUTTON = "Run Phase 1 — Localisation"
 P4_P1_CAPTION = "Where disagreement first exceeds τ"
 P4_P2_BUTTON = "Run Phase 2 — Propagation"
 P4_P2_CAPTION = "How disagreement grows or shrinks"
@@ -624,7 +611,7 @@ P4_OVER_TAU = "over τ"
 P4_WITHIN_TAU = "within τ"
 P4_FIRST_OVER = "First stage over τ"
 P4_NA = "not computable"
-P4_HEAT_AXIS = ("Decomposition", "Transposition", "Cell temperature", "DC", "AC")
+P4_HEAT_AXIS = STAGE_NAME_LIST
 P4_STAGE_TITLE = "Stage table against τ"
 P4_STAGE_PAIR = "Pair"
 P4_COL_STAGE = "Stage"
@@ -708,3 +695,70 @@ P4_P3_PROGRESS_TITLE = "Running Phase 3"
 P4_P3_PROGRESS_PAIR = "Attributing the final AC difference for {pair} ({i} of {n}). This takes a few seconds."
 P4_P3_PROGRESS_SAVE = "Saving the Phase 3 result"
 P4_P3_FAILED = "Phase 3 could not finish ({detail})."
+
+# --- Page 5 · Guided re-execution -----------------------------------------------------------------------
+RX_OPTIONAL = "Optional"
+RX_INTRO = "Swap one model at the pair's localised stage, re-run, and compare."
+RX_EMPTY = "No pair has a first stage over τ, so there is nothing to substitute. The Report is still available."
+RX_GO_REPORT = "Go to the Report"
+RX_PAIR = "Pair (only pairs with a k)"
+RX_PAIR_PLACEHOLDER = "Choose a pair"
+RX_PAIR_OPTION = "{pair} · Outcome {n}"
+RX_STAGE_FIXED = "Localised stage (from Phase 1, fixed)"
+RX_ANCHOR = "Pipeline to modify (anchor)"
+RX_ANCHOR_OPTION = "{a} — compare the result with {b}"
+RX_CANDIDATE = "Candidate at {stage} (pool order)"
+RX_RUN = "Run substitution"
+RX_RUN_NEEDS = "Choose a pair, an anchor and a candidate to run a substitution."
+RX_SENTENCE = (
+    "Every attempt starts from the original {anchor} and changes only {stage}. "
+    "Earlier attempts stay in the provenance record but never carry over."
+)
+RX_NOT_SELECTABLE_TITLE = "Not selectable here"
+RX_NOT_SELECTABLE_SUB = "Shown with the reason; these cannot be chosen."
+RX_REASON_CURRENT = "already the model in {anchor}"
+RX_PROGRESS_TITLE = "Running the substitution"
+RX_PROGRESS_RUN = "Running {anchor} with {candidate} at {stage}"
+RX_PROGRESS_COMPARE = "Comparing it with {other}"
+RX_PROGRESS_SAVE = "Saving the attempt"
+RX_PROGRESS_CONFIRM = "Running the confirmed substitution"
+RX_FAILED = "The substitution could not run ({detail})."
+RX_RESULT_TITLE = "Disagreement with {other} · nRMSD"
+RX_RESULT_SUB = "Attempt {n}: {candidate} at {stage}, anchor {anchor}, pair {pair}."
+RX_COL_BEFORE = "Before"
+RX_COL_AFTER = "After"
+RX_COL_CHANGE = "Change"
+RX_ROW_OUTCOME = "Outcome and k"
+RX_OUTCOME_K = "Outcome {n}, {k}"
+RX_CHART_ALT = (
+    "Line chart of nRMSD by stage for the pair, before the substitution (dashed, squares) and after it "
+    "(solid, circles), with a horizontal line at τ."
+)
+RX_ATTEMPTS_TITLE = "Attempts in this session"
+RX_ATTEMPTS_NONE = "No attempt has been run for this pair yet."
+RX_ATTEMPT_COLUMNS = ("Attempt", "Anchor", "Candidate", "Outcome", "k")
+RX_VIEW = "Attempt shown"
+RX_ATTEMPT_LABEL = "Attempt {n}"
+RX_YIELD_OPEN = "Show annual yield"
+RX_YIELD_NOTE = "Annual AC energy over the file, in kWh."
+RX_YIELD_ORIGINAL = "{anchor} (original)"
+RX_YIELD_SUBSTITUTED = "{anchor} with {candidate}"
+RX_CONFIRM = "Confirm {candidate}"
+RX_CONFIRM_ASK = "Save {candidate} at {stage} for {anchor} in {pair} as the confirmed change?"
+RX_CONFIRM_REPLACES = "This replaces the confirmed change: {change}."
+RX_CONFIRM_YES = "Save"
+RX_CONFIRM_NO = "Cancel"
+RX_YIELD_CHECK = "Also compute the annual yield on confirm"
+RX_CONFIRM_ONLY_RUN = "Confirm is offered for an attempt that has been run in this session."
+RX_CONFIRMED_TITLE = "Confirmed change"
+RX_CONFIRMED_CHANGE = "{pair} · {stage}: {candidate}"
+RX_CONFIRMED_SAVED = "Saved. The confirmed change is {change}."
+RX_CONFIRMED_ANCHOR = "Anchor"
+RX_CONFIRMED_CANDIDATE = "Candidate"
+RX_CONFIRMED_STAGE = "Stage"
+RX_CONFIRMED_MODELS = "Models of the confirmed pipeline"
+RX_CONFIRMED_YIELD = "Annual AC energy"
+RX_NOT_RECORDED = "not recorded for this analysis"
+RX_NOT_COMPUTABLE_AFTER = "After the substitution: {text}"
+RX_OPTIONAL_TITLE = "This step is optional. The Report does not need it."
+RX_YIELD_NONE = "not computed"

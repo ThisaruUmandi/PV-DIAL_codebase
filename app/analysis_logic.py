@@ -213,6 +213,12 @@ def stage_rows(view: PairView, models: dict[str, dict[str, str]]) -> list[dict[s
     return rows
 
 
+def nrmsd_axis_max(views: list[PairView], tau: float) -> float:
+    """One upper end for every nRMSD axis on the page: the largest value of any pair (or τ), with a little room."""
+    values = [v for view in views for v in view.nrmsd.values() if v is not None]
+    return max([*values, tau]) * 1.15
+
+
 def full_rows(views: list[PairView]) -> list[list[str]]:
     """Every stored metric, one row per pair and stage, for the closed 'full table'."""
     rows = []
@@ -340,7 +346,7 @@ def fmt_signed(value: float | None) -> str:
     if value is None:
         return wording.P4_NA
     text = f"{abs(value):.4f}"
-    return f"{wording.P4_MINUS}{text}" if value < 0 else text
+    return f"{wording.P4_MINUS}{text}" if value < 0 and round(abs(value), 4) != 0 else text
 
 
 @dataclass(frozen=True)
@@ -545,6 +551,7 @@ __all__ = [
     "has_k",
     "k_band",
     "k_band_text",
+    "nrmsd_axis_max",
     "phase1_from_dict",
     "phase1_results_from",
     "phase1_view",

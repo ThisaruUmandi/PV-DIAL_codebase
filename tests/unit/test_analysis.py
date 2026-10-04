@@ -234,6 +234,16 @@ def test_constructed_outcome_3_pair_covers_phase2_phase3_reexec_and_roundtrip(tm
     assert all(v["status"] == "ran" for v in saved["phase3"].values())
     assert saved["reexec"]["substituted_stage_model"]["temperature_model"] == "pvsyst_cell"
 
+    # the saved change can be read back later: anchor, stage, candidate and the substituted pipeline's Phase 1,
+    # in the same shape the interface saves (same writer), and the export carries the same section
+    reexec = saved["reexec"]
+    assert (reexec["anchor"], reexec["stage"], reexec["candidate"]) == ("A", "TEMPERATURE", "pvsyst_cell")
+    assert reexec["phase1"]["status"] == "ran" and set(reexec["phase1"]) == set(saved["phase1"]["A-B"])
+    assert reexec["phase1"]["tau"] == saved["phase1"]["A-B"]["tau"]
+    assert reexec["config_label"] == "A_B_confirmed" and reexec["phase1"]["pair"][0] == reexec["config_label"]
+    assert analysis_module.build_results_dict(run)["reexec"] == reexec
+    assert set(reexec) == set(analysis_module.reexec_to_dict(run.reexec_result))  # the same keys with or without details
+
 
 @pytest.mark.slow
 @requires_postgres

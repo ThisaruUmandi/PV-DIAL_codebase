@@ -9,6 +9,7 @@ import pandas as pd
 
 from app import wording
 from app.analysis_logic import PHI_UNIT, PairView, Phase2View, Phase3View, fmt_nrmsd, fmt_watts
+from app.reexec_logic import AttemptView
 
 _INK = "#1F2328"
 _TEAL = "#1F5F6B"
@@ -41,8 +42,8 @@ def heatmap(views: list[PairView]) -> alt.Chart:
     frame = heat_frame(views)
     pairs = [view.label for view in views]
     x = alt.X("stage:N", title=None, scale=alt.Scale(domain=list(wording.P4_HEAT_AXIS)),
-              axis=alt.Axis(orient="top", labelAngle=0, labelFont="IBM Plex Sans", labelColor=_INK, labelPadding=6,
-                            labelOverlap=False, labelLimit=0, labelFontSize=10))
+              axis=alt.Axis(orient="top", labelAngle=-30, labelAlign="left", labelBaseline="bottom", labelFont="IBM Plex Sans",
+                            labelColor=_INK, labelPadding=6, labelOverlap=False, labelLimit=0, labelFontSize=11))
     y = alt.Y("pair:N", title=None, scale=alt.Scale(domain=pairs),
               axis=alt.Axis(labelFont="IBM Plex Sans", labelColor=_INK, labelPadding=6))
     computed = frame.dropna(subset=["nrmsd"])
@@ -69,7 +70,7 @@ def heatmap(views: list[PairView]) -> alt.Chart:
                 x=x, y=y, text=alt.value(wording.P4_NA)
             )
         )
-    return alt.layer(*layers).properties(height=60 * len(pairs) + 24).configure(background="#FFFFFF").configure_view(stroke=None)
+    return alt.layer(*layers).properties(height=60 * len(pairs) + 60).configure(background="#FFFFFF").configure_view(stroke=None)
 
 
 def stage_bars_frame(rows: list[dict], tau: float) -> pd.DataFrame:
@@ -87,13 +88,14 @@ def stage_bars_frame(rows: list[dict], tau: float) -> pd.DataFrame:
     )
 
 
-def stage_bars(rows: list[dict], tau: float, tau_label: str) -> alt.Chart:
+def stage_bars(rows: list[dict], tau: float, tau_label: str, axis_max: float | None = None) -> alt.Chart:
     """nRMSD per stage for one pair, with τ as a vertical line. Bars over τ are outlined."""
     frame = stage_bars_frame(rows, tau).dropna(subset=["nrmsd"])
     domain = list(wording.P4_HEAT_AXIS)
     y = alt.Y("stage:N", title=None, scale=alt.Scale(domain=domain),
               axis=alt.Axis(labelFont="IBM Plex Sans", labelColor=_INK))
-    x = alt.X("nrmsd:Q", title="nRMSD (unitless)", axis=alt.Axis(grid=True, **_AXIS))
+    scale = alt.Scale(domain=[0, axis_max], nice=False) if axis_max else alt.Scale()
+    x = alt.X("nrmsd:Q", title="nRMSD (unitless)", scale=scale, axis=alt.Axis(grid=True, **_AXIS))
     bars = (
         alt.Chart(frame)
         .mark_bar(color=_TEAL, size=18)
@@ -228,7 +230,55 @@ def waterfall(view: Phase3View) -> alt.Chart:
     )
 
 
+def attempt_frame(view: AttemptView) -> pd.DataFrame:
+    """What the attempt chart draws and the table beside it prints: nRMSD by stage, before and after."""
+    rows = []
+    for row in view.rows:
+        for series, value in ((wording.RX_COL_BEFORE, row.before), (wording.RX_COL_AFTER, row.after)):
+            rows.append(
+                {
+                    "stage": wording.STAGE_NAME[row.stage], "series": series, "nrmsd": value, "text": fmt_nrmsd(value),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def attempt_chart(view: AttemptView, tau_label: str, top: float) -> alt.Chart:
+    """Before (dashed, squares) and after (solid, circles) by stage, with τ as a horizontal line. The vertical
+    range is the one `top` gives, the same for every attempt shown, so charts can be compared."""
+    frame = attempt_frame(view)
+    names = [wording.RX_COL_BEFORE, wording.RX_COL_AFTER]
+    colour = alt.Scale(domain=names, range=["#5B6168", _TEAL])
+    dash = alt.Scale(domain=names, range=[[6, 4], [1, 0]])
+    shape = alt.Scale(domain=names, range=["square", "circle"])
+    x = alt.X("stage:N", title=None, scale=alt.Scale(domain=list(wording.STAGE_NAME_LIST)),
+              axis=alt.Axis(labelAngle=-35, labelAlign="right", labelBaseline="middle", labelFont="IBM Plex Sans",
+                            labelColor=_INK, labelOverlap=False, labelFontSize=11, labelLimit=0))
+    y = alt.Y("nrmsd:Q", title="nRMSD (unitless)", scale=alt.Scale(domain=[0, top], nice=False),
+              axis=alt.Axis(grid=True, **_AXIS))
+    legend = alt.Legend(title=None, symbolType="stroke", symbolStrokeWidth=3, labelColor="#3E444A")
+    line = alt.Chart(frame).mark_line(strokeWidth=2.5).encode(
+        x=x, y=y, color=alt.Color("series:N", scale=colour, legend=legend),
+        strokeDash=alt.StrokeDash("series:N", scale=dash, legend=None),
+    )
+    points = alt.Chart(frame).mark_point(filled=True, size=60, opacity=1).encode(
+        x=x, y=y, color=alt.Color("series:N", scale=colour, legend=None),
+        shape=alt.Shape("series:N", scale=shape, legend=None),
+    )
+    rule = alt.Chart(pd.DataFrame({"tau": [view.tau]})).mark_rule(color=_INK, strokeWidth=2, strokeDash=[5, 3]).encode(y="tau:Q")
+    tag = alt.Chart(pd.DataFrame({"tau": [view.tau], "label": [f"τ = {tau_label}"]})).mark_text(
+        align="center", dy=-8, font=_MONO, fontSize=11, color=_INK
+    ).encode(y="tau:Q", text="label:N", x=alt.datum(wording.STAGE_NAME_LIST[1]))
+    return (
+        alt.layer(line, points, rule, tag).properties(height=300)
+        .configure(background="#FFFFFF").configure_view(stroke="#E6E1D7")
+        .configure_axis(gridColor="#EEEAE2", domainColor="#C9C3B7", tickColor="#C9C3B7")
+    )
+
+
 __all__ = [
+    "attempt_chart",
+    "attempt_frame",
     "heat_frame",
     "heatmap",
     "propagation_chart",

@@ -122,7 +122,7 @@ def test_a_pair_that_is_not_computable_has_no_k_and_no_band():
     views = al.phase1_view(phase1)
     assert [v.key for v in views] == ["A-B", "A-C", "B-C"]  # fixed order
     assert views[0].computable is False and views[0].k is None and views[0].band is None
-    assert views[0].not_computable == "Not computable — zero spread at stage AC power"
+    assert views[0].not_computable == "Not computable — zero spread at stage AC conversion"
     assert views[0].outcome is None and views[0].nrmsd == dict.fromkeys(STAGES)
 
 

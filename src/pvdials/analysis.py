@@ -652,9 +652,26 @@ def phase3_to_dict(results: dict[tuple[str, str], Any]) -> dict[str, Any]:
     return {f"{a}-{b}": phase3_pair_to_dict(r) for (a, b), r in results.items()}
 
 
-def reexec_to_dict(result: FinalRunResult | None) -> dict[str, Any] | None:
+@dataclass(frozen=True)
+class ReexecDetails:
+    """What a confirmed re-execution needs to be read back later, which the run result alone does not say:
+    which pipeline was the anchor, at which stage (the pair's k), the candidate, and the Phase 1 of the
+    substituted pipeline against the other one. phase1 is a result, its "not computable" reason string, or
+    an already-written phase1 dict."""
+
+    anchor: str
+    stage: Stage
+    candidate: str
+    phase1: PairPhase1Result | str | dict[str, Any]
+
+
+def reexec_to_dict(result: FinalRunResult | None, details: ReexecDetails | None = None) -> dict[str, Any] | None:
+    """The one writer of analyses.reexec, for the command line and the interface alike. The four keys
+    anchor, stage, candidate and phase1 are always present; they are None when no details were given, and
+    a row saved before they existed simply lacks them (both read as 'not recorded')."""
     if result is None:
         return None
+    phase1 = details.phase1 if details is not None else None
     return {
         "pair": list(result.pair),
         "config_label": result.config.label,
@@ -663,7 +680,39 @@ def reexec_to_dict(result: FinalRunResult | None) -> dict[str, Any] | None:
         },
         "annual_yield_kwh": _safe_float(result.annual_yield_kwh),
         "disclaimer": result.disclaimer,
+        "anchor": details.anchor if details is not None else None,
+        "stage": details.stage.name if details is not None else None,
+        "candidate": details.candidate if details is not None else None,
+        "phase1": phase1 if isinstance(phase1, dict) or phase1 is None else phase1_to_dict(phase1),
     }
+
+
+def reexec_details_for(
+    config: AnalysisConfig,
+    pipelines: PipelineRunResult,
+    phase1_results: dict[tuple[str, str], PairPhase1Result | str],
+    final: FinalRunResult | None,
+    ctx: SiteContext,
+    defaults: dict,
+    tau: Tau | None = None,
+) -> ReexecDetails | None:
+    """The command line's details for the re-execution it just made: the anchor and candidate it was given,
+    the pair's k as the stage, and the Phase 1 of the substituted pipeline against the other pipeline (the
+    same comparison an interface attempt makes). Writes nothing."""
+    if final is None or config.reexecution is None:
+        return None
+    label_a, label_b = config.reexecution["pair"].split("-")
+    anchor = config.reexecution["anchor"]
+    other = label_b if anchor == label_a else label_a
+    pair_result = phase1_results.get((label_a, label_b))
+    stage = pair_result.k if isinstance(pair_result, PairPhase1Result) else None
+    if stage is None:
+        return None
+    phase1 = run_phase1(
+        final.config, final.result, pipelines.configs[other], pipelines.results[other], ctx.daylight,
+        defaults=defaults, tau=tau,
+    )
+    return ReexecDetails(anchor=anchor, stage=stage, candidate=config.reexecution["candidate"], phase1=phase1)
 
 
 def build_run_info(
@@ -783,6 +832,7 @@ class AnalysisRunResult:
     phase2_result: Phase2Result | None
     phase3_results: dict[tuple[str, str], Phase3Result | Phase3NotComputable | str]
     reexec_result: FinalRunResult | None
+    reexec_details: ReexecDetails | None = None
 
 
 def run_analysis(
@@ -860,7 +910,10 @@ def run_analysis(
     reexec_result = step_reexecution(
         config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id, tau=tau
     )
-    reexec_dict = reexec_to_dict(reexec_result)
+    reexec_details = reexec_details_for(
+        config, pipelines, phase1_results, reexec_result, site_result.ctx, defaults, tau
+    )
+    reexec_dict = reexec_to_dict(reexec_result, reexec_details)
     run_info = build_run_info(
         started_at, load_result, site_result, pipelines,
         finished_at=datetime.now(UTC).isoformat(),
@@ -883,6 +936,7 @@ def run_analysis(
         phase2_result=phase2_result,
         phase3_results=phase3_results,
         reexec_result=reexec_result,
+        reexec_details=reexec_details,
     )
 
 
@@ -928,7 +982,7 @@ def build_results_dict(run: AnalysisRunResult) -> dict[str, Any]:
         "phase1": {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in run.phase1_results.items()},
         "phase2": phase2_to_dict(run.phase2_result, run.phase1_results),
         "phase3": phase3_to_dict(run.phase3_results),
-        "reexec": reexec_to_dict(run.reexec_result),
+        "reexec": reexec_to_dict(run.reexec_result, run.reexec_details),
     }
 
 

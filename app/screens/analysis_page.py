@@ -173,8 +173,8 @@ def _heat_table(views) -> str:
             if value is None:
                 cells.append(f'<td class="pv-na">{escape(wording.P4_NA)}</td>')
                 continue
-            over = f' <span class="pv-over">{escape(wording.P4_OVER_TAU)}</span>' if stage in view.over else ""
-            cells.append(f'<td class="pv-num"><span class="pv-mono">{analysis_logic.fmt_nrmsd(value)}</span>{over}</td>')
+            mark = components.over_tau_mark() if stage in view.over else ""
+            cells.append(f'<td class="pv-num pv-nowrap">{mark}<span class="pv-mono">{analysis_logic.fmt_nrmsd(value)}</span></td>')
         rows.append(f"<tr><td>{escape(wording.P4_HEAT_AXIS[index])}</td>{''.join(cells)}</tr>")
     return (
         '<table class="pv-stage-table"><thead><tr>'
@@ -185,7 +185,7 @@ def _heat_table(views) -> str:
 def _heat_card(views, tau: dict) -> None:
     with st.container(key="card_heat"):
         components.card_title(wording.P4_HEAT_TITLE, wording.P4_HEAT_SUB.format(tau=analysis_logic.tau_text(tau)))
-        chart, table = st.columns([3, 2])
+        chart, table = st.columns([4, 5])
         with chart:
             st.altair_chart(analysis_charts.heatmap(views), width="stretch")
         with table:
@@ -195,14 +195,13 @@ def _heat_card(views, tau: dict) -> None:
 def _stage_table(rows, tau: dict) -> str:
     body = []
     for row in rows:
-        against = wording.P4_OVER_TAU if row["over"] else wording.P4_WITHIN_TAU
-        kind = "bad" if row["over"] else "ok"
+        against = components.over_tau_mark() if row["over"] else f'<span class="pv-within">{escape(wording.P4_WITHIN_TAU)}</span>'
         first = f'<span class="pv-first">{escape(wording.P4_FIRST_OVER)}</span>' if row["first"] else ""
         value = wording.P4_NA if row["nrmsd"] is None else row["text"]
         body.append(
             f"<tr><td>{escape(row['label'])}{first}</td>"
             f'<td class="pv-num pv-mono">{escape(value)}</td>'
-            f'<td><span class="pv-status pv-status-{kind}">{components.icon("warn" if row["over"] else "ok")}{escape(against)}</span></td>'
+            f"<td>{against}</td>"
             f'<td class="pv-models">{row["models"]}</td></tr>'
         )
     against_header = wording.P4_COL_AGAINST.format(tau=analysis_logic.tau_text(tau))
@@ -231,11 +230,12 @@ def _stage_card(ss, views, tau: dict) -> None:
             components.message("warn", view.not_computable or "")
             return
         rows = analysis_logic.stage_rows(view, models)
+        axis_max = analysis_logic.nrmsd_axis_max(views, tau["value"])  # the same range whichever pair is shown
         table, chart = st.columns([3, 2])
         with table:
             st.html(_stage_table(rows, tau))
         with chart:
-            st.altair_chart(analysis_charts.stage_bars(rows, tau["value"], analysis_logic.tau_text(tau)), width="stretch")
+            st.altair_chart(analysis_charts.stage_bars(rows, tau["value"], analysis_logic.tau_text(tau), axis_max), width="stretch")
         st.html(f'<p class="pv-note-line">{escape(wording.P4_UNITLESS.format(tau=analysis_logic.tau_text(tau)))}</p>')
 
 
