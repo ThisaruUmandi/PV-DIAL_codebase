@@ -383,6 +383,7 @@ def _continue(ss, form, ingest) -> None:
     ss["analysis_id"] = done.analysis_id
     ss["name"] = form.name.strip()
     ss["location"] = done.inputs["location"]
+    ss["inputs"] = done.inputs  # page 2 chooses its pool from the module and mounting saved here
     ss["data_valid"] = True
     ss["flash"] = wording.D_SAVED_FLASH
     st.switch_page(components.PAGES["2"])

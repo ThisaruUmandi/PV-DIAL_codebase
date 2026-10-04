@@ -55,7 +55,7 @@ def test_tau_change_clears_steps_3_to_6_only_and_page_1_change_keeps_tau():
     assert ss["pending"]["message"] == wording.clears_message(3)
     state.confirm_pending(ss)
     assert ss["tau"]["source"] == "user_entered"
-    assert ss["config_valid"] is True  # step 2 itself is kept
+    assert ss["config_valid"] is False  # step 2 is reopened: it has to be confirmed (Continue) again
     assert ss["run"] is None and ss["phase1"] is None
 
     state.set_progress(ss, 4)

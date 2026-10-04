@@ -303,6 +303,8 @@ TAG_TITLES = {
     "required": "You must fill this in before you can continue.",
     "optional": "You can leave this empty.",
     "default": "Pre-filled with a standard value; change it if yours differs.",
+    "user": "You changed this from its standard value.",
+    "differs": "At least two of the three pipelines use different models at this stage.",
 }
 
 # --- Page 1: polish ------------------------------------------------------------------------------
@@ -346,3 +348,55 @@ N_INVERTER = "inverter"
 N_MODULES = "modules per string"
 N_STRINGS = "strings per inverter"
 N_HEIGHT = "module height"
+
+# --- Page 2 · Pipeline configuration ---------------------------------------------------------------
+C_INTRO = "One model per stage for each pipeline. Lists come from the pool for this module, in pool order."
+C_COLUMN = "Pipeline {label}"
+C_STAGE_LABELS = {
+    "decomposition": "1 · Decomposition",
+    "transposition": "2 · Transposition",
+    "temperature": "3 · Cell temperature",
+    "dc": "4 · DC power",
+    "ac": "5 · AC conversion",
+}
+C_STAGE_HEADER = "Stage"
+C_DIFFERS = "Differs across pipelines"
+C_CHOOSE = "Choose a model"
+C_ARIA_CELL = "Pipeline {label} {stage}"
+C_EXAMPLE_BUTTON = "Fill with the thesis example"
+C_EXAMPLE_NOTE = (
+    "An example to try the tool, taken from analysis.yaml. It says nothing about which pipeline "
+    "is closer to the real system."
+)
+C_EXAMPLE_SKIPPED = "Not filled in, because it is not available here: {names}."
+# the mock-up marks a DC model in this list, because sapm also names a temperature model
+C_STAGE_MARK = {"dc": " (DC)"}
+C_NOT_SELECTABLE_TITLE = "Not selectable for this module"
+C_NOT_SELECTABLE_SUB = "Shown with the reason; these cannot be chosen."
+C_AC_FOLLOWS = (
+    "AC options follow each pipeline's DC model: with pvwatts_dc, sandia and adr become unavailable (no v_dc)."
+)
+C_NOTE_OWN_PVWATTS = "pvwatts_dc gives no DC voltage, so {names} cannot follow it and are not offered."
+C_NOTE_OTHER_PVWATTS = (
+    "Another pipeline uses pvwatts_dc, which gives no DC voltage. {names} are not offered here, because "
+    "mixing them would leave the attribution for that pair incomputable."
+)
+C_NOTE_DC_OWN_AC = "pvwatts_dc is not offered because this pipeline's AC model ({ac}) needs a DC voltage."
+C_NOTE_DC_OTHER_AC = (
+    "pvwatts_dc is not offered because another pipeline's AC model needs a DC voltage; mixing them would "
+    "leave the attribution for that pair incomputable."
+)
+C_SETTINGS_TITLE = "Analysis settings"
+C_SETTINGS_SUB = "Values that apply to the whole analysis."
+C_TAU_LABEL = "τ (threshold)"
+C_TAU_RESET = "Reset to default"
+C_TAU_PROBLEM = "τ must be a number greater than 0."
+TAG_USER_ENTERED = "user entered"
+C_CONTINUE = "Continue to run"
+C_BACK = "Back to data & site"
+C_SAVED_FLASH = "Saved. Step 2 is complete."
+C_CHECKLIST_PIPELINE = "Pipeline {label}: all five stages chosen"
+C_CHECKLIST_TAU = "τ is a number above 0"
+C_STILL_NEEDS = "needs {stages}"
+C_NO_DATA = "Complete step 1 first: the pipelines are chosen from the pool for the module you picked there."
+C_SETUP_FAILED = "The configuration could not be saved ({detail}). Check the choices and try again."

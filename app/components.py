@@ -101,6 +101,8 @@ _TAGS = {
     "required": (wording.TAG_REQUIRED, None),
     "optional": (wording.TAG_OPTIONAL, None),
     "default": (wording.TAG_DEFAULT, None),
+    "user": (wording.TAG_USER_ENTERED, None),
+    "differs": (wording.C_DIFFERS, None),
 }
 
 

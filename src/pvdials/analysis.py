@@ -55,7 +55,7 @@ from pvdials.data.validate import (
     run_all_validations,
     validate_physical_consistency,
 )
-from pvdials.dla.metrics import Tau, resolve_tau
+from pvdials.dla.metrics import Tau, resolve_user_tau
 from pvdials.dla.phase1 import PairPhase1Result, run_phase1
 from pvdials.dla.phase2 import Phase2Result, run_phase2
 from pvdials.dla.phase3 import (
@@ -375,13 +375,21 @@ def failed_check_names(checks: dict[str, ValidationResult]) -> list[str]:
 
 
 def step_disagreement_check(
-    pipelines: PipelineRunResult, ctx: SiteContext, defaults: dict
+    pipelines: PipelineRunResult,
+    ctx: SiteContext,
+    defaults: dict,
+    tau_value: float | None = None,
+    tau: Tau | None = None,
 ) -> dict[tuple[str, str], PairPhase1Result | str]:
     """A pair involving a pipeline that failed its own checks is reported as
     'not computable' before Phase 1 even runs -- running a disagreement
     comparison against known-bad output would just measure the bug, not any
     real disagreement.
+
+    tau: the run's already-resolved Tau, shared by every pair; if not given it is
+    resolved here once from tau_value (a user-entered value, > 0) or the default.
     """
+    tau = tau if tau is not None else resolve_user_tau(tau_value, defaults)
     results: dict[tuple[str, str], PairPhase1Result | str] = {}
     for label_a, label_b in PAIR_LABELS:
         failed_a = failed_check_names(pipelines.checks[label_a])
@@ -396,7 +404,7 @@ def step_disagreement_check(
             results[(label_a, label_b)] = run_phase1(
                 pipelines.configs[label_a], pipelines.results[label_a],
                 pipelines.configs[label_b], pipelines.results[label_b],
-                ctx.daylight, defaults=defaults,
+                ctx.daylight, defaults=defaults, tau=tau,
             )
         except Exception as exc:
             raise AnalysisError(
@@ -480,6 +488,7 @@ def step_reexecution(
     ctx: SiteContext,
     defaults: dict,
     analysis_id: str,
+    tau: Tau | None = None,
 ) -> FinalRunResult | None:
     """Non-interactive: goes straight to confirm() with the one YAML-given
     candidate. propose()/retry() exist for a *live* user comparing options
@@ -522,6 +531,7 @@ def step_reexecution(
         daylight=ctx.daylight,
         defaults=defaults,
         on_record=record_ids.append,
+        tau=tau,
     )
     try:
         final = session.confirm(candidate, compute_yield=True)
@@ -766,7 +776,9 @@ class AnalysisRunResult:
     reexec_result: FinalRunResult | None
 
 
-def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunResult:
+def run_analysis(
+    yaml_path: str, analysis_id: str | None = None, tau_value: float | None = None
+) -> AnalysisRunResult:
     """Runs every step in order, saving progress to the analyses table after
     each one (status = last step reached), so a crash mid-run still leaves a
     queryable partial record. Checks Postgres reachability first, before
@@ -785,17 +797,14 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     started_clock = time.monotonic()
     config = parse_analysis_yaml(yaml_path)
     defaults = load_defaults()
-    # tau is now resolved in two places: here (early, so the SiteContext and
-    # every provenance record can carry it) and again, unchanged, once per
-    # pair inside run_phase1() (dla/phase1.py, via step_disagreement_check).
-    # Both calls use the same resolve_tau(None, defaults) with the same
-    # defaults object, so they are guaranteed to agree -- not restructuring
-    # Phase 1 to remove the second call. If analysis.yaml ever gains a real
-    # tau-override field, that value must reach BOTH call sites, ideally by
-    # resolving once here and threading the result into
-    # step_disagreement_check too, rather than letting the two resolutions
-    # drift apart.
-    tau = resolve_tau(None, defaults)
+    # tau is resolved ONCE, here, and the same Tau object is passed to every point that
+    # uses it: the SiteContext (so every provenance record carries it), every pair's
+    # Phase 1, and the re-execution session's Phase 1. tau_value is a user-entered
+    # value (> 0) or None for the default; nothing downstream resolves it again.
+    try:
+        tau = resolve_user_tau(tau_value, defaults)
+    except ValueError as exc:
+        raise AnalysisError(f"Step 1 (input data and configuration) failed: {exc}") from exc
     inputs_dict = build_inputs_dict(config, tau)
     save_analysis(analysis_id, config.name, "started", inputs_dict)
 
@@ -817,7 +826,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
         pipelines=pipelines_dict, run_info=run_info,
     )
 
-    phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults)
+    phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults, tau=tau)
     phase1_dict = {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in phase1_results.items()}
     save_analysis(
         analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict, pipelines=pipelines_dict,
@@ -840,7 +849,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     )
 
     reexec_result = step_reexecution(
-        config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id
+        config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id, tau=tau
     )
     reexec_dict = reexec_to_dict(reexec_result)
     run_info = build_run_info(

@@ -77,6 +77,7 @@ def run_phase1(
     daylight: pd.Series,
     tau_value: float | None = None,
     defaults: dict | None = None,
+    tau: Tau | None = None,
 ) -> PairPhase1Result | str:
     """Run Phase 1 (and, equivalently, the disagreement check) for one pair.
 
@@ -90,7 +91,9 @@ def run_phase1(
     nothing for Phase 2/3/O4 to use for that pair.
     """
     defaults = defaults or load_defaults()
-    tau = resolve_tau(tau_value, defaults)
+    # tau: an already-resolved Tau (the orchestrator resolves once and passes the same
+    # object to every point); otherwise resolved here from tau_value, as before.
+    tau = tau if tau is not None else resolve_tau(tau_value, defaults)
 
     metrics: dict[Stage, PairMetrics] = {}
     for stage in _STAGES_IN_ORDER:

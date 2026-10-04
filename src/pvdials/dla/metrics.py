@@ -57,6 +57,17 @@ def resolve_tau(user_value: float | None, defaults: dict) -> Tau:
     return Tau(float(user_value), TAG_USER_ENTERED)
 
 
+def resolve_user_tau(user_value: float | None, defaults: dict) -> Tau:
+    """resolve_tau(), for a tau typed by a person: it must be a finite number above 0
+    (KT E.1 -- the only check on the value; no advice on it). None means 'not entered'
+    and gives the default. resolve_tau() itself is unchanged for existing callers."""
+    if user_value is not None and (
+        isinstance(user_value, bool) or not math.isfinite(float(user_value)) or float(user_value) <= 0
+    ):
+        raise ValueError(f"tau must be a number greater than 0, got {user_value!r}")
+    return resolve_tau(user_value, defaults)
+
+
 @dataclass(frozen=True)
 class PairMetrics:
     """One pair's metrics at one stage. All computed over daylight rows only.

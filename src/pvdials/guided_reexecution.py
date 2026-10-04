@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from pvdials.config import load_defaults
+from pvdials.dla.metrics import Tau, resolve_user_tau
 from pvdials.dla.phase1 import PairPhase1Result, run_phase1
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.registry import (
@@ -197,6 +198,10 @@ class O4Session:
     daylight: pd.Series
     defaults: dict | None = None
     on_record: Callable[[str], None] | None = None
+    # tau for the attempt's Phase 1: the run's already-resolved Tau, or a user-entered
+    # value (> 0); neither -> the default. Must be the tau the run's records carry.
+    tau_value: float | None = None
+    tau: Tau | None = None
 
     def alternatives(self) -> tuple[CandidateModel, ...]:
         return alternatives_at_stage(
@@ -240,9 +245,10 @@ class O4Session:
 
     def _propose_or_retry(self, candidate_model: str) -> ProposalResult:
         defaults = self.defaults or load_defaults()
+        tau = self.tau if self.tau is not None else resolve_user_tau(self.tau_value, defaults)
         config, result = self._run_substitution(candidate_model, "reexec", defaults)
         phase1 = run_phase1(
-            config, result, self.other_config, self.other_result, self.daylight, defaults=defaults
+            config, result, self.other_config, self.other_result, self.daylight, defaults=defaults, tau=tau
         )
         return ProposalResult(
             pair=self.pair, candidate_model=candidate_model, config=config, result=result, phase1=phase1

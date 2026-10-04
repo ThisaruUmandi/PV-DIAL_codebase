@@ -39,7 +39,7 @@ LAST_STEP = 6
 # A step that is done has opened the next one, so changing one of its inputs needs the
 # warning even if nothing later holds a result yet, and its flag is reset: the step has to
 # be confirmed again (Continue) before the next one opens.
-OPENS_NEXT = {1: "data_valid"}
+OPENS_NEXT = {1: "data_valid", 2: "config_valid"}
 
 _DEFAULTS: dict[str, Any] = {
     "analysis_id": None,
@@ -67,6 +67,7 @@ _DEFAULTS: dict[str, Any] = {
     "pending": None,
     "ingest": None,
     "location": None,
+    "inputs": None,
     "flash": None,
 }
 
@@ -79,8 +80,17 @@ def init_state(ss: MutableMapping) -> None:
         ss.setdefault(key, value)
 
 
+# Widget state is kept per page under these prefixes; a new analysis must not inherit it.
+_PAGE_WIDGET_PREFIXES = ("w1_", "w2_")
+_PAGE_TRANSIENT = ("upload_n", "upload_problem", "_ingest_new", "cancel_note")
+
+
 def new_analysis(ss: MutableMapping) -> None:
-    """Start from nothing (Home > Start new analysis)."""
+    """Start from nothing (Home > Start new analysis): no value typed or chosen for an earlier
+    analysis may show up in this one, so every page's widget state goes too."""
+    for key in list(ss.keys()):
+        if key.startswith(_PAGE_WIDGET_PREFIXES) or key in _PAGE_TRANSIENT:
+            del ss[key]
     for key, value in _DEFAULTS.items():
         ss[key] = value
 
@@ -164,6 +174,7 @@ def request_change(
     widget_key: str | None = None,
     old_widget: Any = _UNSET,
     reset_uploader: bool = False,
+    restore_many: dict[str, Any] | None = None,
 ) -> bool:
     """Change an input. Returns True if applied now.
 
@@ -183,6 +194,8 @@ def request_change(
     restore = dict(existing.get("restore", {}))
     if widget_key is not None:
         restore.setdefault(widget_key, ss.get(key) if old_widget is _UNSET else old_widget)
+    for many_key, many_old in (restore_many or {}).items():
+        restore.setdefault(many_key, many_old)
     ss["pending"] = {
         "key": key,
         "old": existing.get("old", ss.get(key)),

@@ -413,3 +413,32 @@ div.st-key-replace [data-testid="stFileUploaderDropzone"] button:hover { backgro
 div.st-key-continue_row [data-testid="stElementContainer"]:has(.stButton) { width: 100%; }
 div.st-key-continue_row .stButton { display: flex; justify-content: flex-end; }
 [data-testid="stElementContainer"]:has(> [data-testid="stHtml"] .pv-tight) { margin-top: -12px; }
+
+/* ---- Step 2 · Pipeline configuration (from the Configure mock-up) ----------------------------------------------- */
+div.st-key-cfg_table {
+  background: #fff; border: 1px solid var(--pv-border); border-radius: 12px; overflow: hidden; gap: 0; padding: 0;
+}
+div.st-key-cfg_table [data-testid="stHorizontalBlock"] { gap: 14px; align-items: flex-start; }
+div.st-key-cfg_head { background: var(--pv-fill); padding: 14px 18px; gap: 0; }
+.pv-th-plain { font-size: 14px; font-weight: 600; color: var(--pv-text); }
+div[class*="st-key-cfg_row_"] { padding: 12px 18px; border-top: 1px solid var(--pv-border-soft); gap: 8px; }
+.pv-stage-cell { display: flex; flex-direction: column; gap: 4px; justify-content: center; min-height: 40px; }
+.pv-stage-name { font-weight: 600; font-size: 14px; }
+.pv-tag-differs { border: 0; background: transparent; padding: 0; color: var(--pv-teal-dark); font-weight: 600; }
+div.st-key-cfg_table [data-testid="stSelectbox"] * { font-family: var(--pv-mono); font-size: 14px; }
+div.st-key-cfg_table .pv-msg { font-family: var(--pv-sans); font-size: 13px; }
+div.st-key-cfg_table .pv-msg span { font-family: var(--pv-sans); }
+div.st-key-cfg_example { flex-direction: row; align-items: center; gap: 14px; flex-wrap: wrap; }
+div.st-key-card_notsel, div.st-key-card_settings { gap: 12px; }
+.pv-notsel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; row-gap: 8px; font-size: 13px; color: #3E444A; line-height: 1.45; }
+.pv-model { font-weight: 500; color: var(--pv-text); }
+div.st-key-continue_row [data-testid="stColumn"]:first-child { justify-content: flex-end; }
+
+/* dropdowns: the same white box, 1px #B9C2C4 border and teal focus ring as the other inputs */
+.stApp [data-testid="stSelectbox"] [role="group"] {
+  border: 1px solid #B9C2C4; border-radius: 8px; background: #FFFFFF; min-height: 40px;
+}
+.stApp [data-testid="stSelectbox"] [role="group"]:focus-within { border-color: var(--pv-teal); box-shadow: 0 0 0 3px rgba(31, 95, 107, 0.3); }
+.stApp [data-testid="stSelectbox"] button[aria-label="Clear value"] { display: none; }
+.stApp [data-testid="stSelectbox"] input { font-size: 14px; }
+div.st-key-continue_row [data-testid="stPageLink"] a { color: var(--pv-teal); font-weight: 600; text-decoration: underline; }
