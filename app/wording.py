@@ -400,3 +400,190 @@ C_CHECKLIST_TAU = "τ is a number above 0"
 C_STILL_NEEDS = "needs {stages}"
 C_NO_DATA = "Complete step 1 first: the pipelines are chosen from the pool for the module you picked there."
 C_SETUP_FAILED = "The configuration could not be saved ({detail}). Check the choices and try again."
+
+# --- Page 3 · Run & provenance ---------------------------------------------------------------------
+R_EMPTY_TITLE = "Not run yet"
+R_EMPTY_TEXT = (
+    "The three pipelines you configured have not been run for this analysis. "
+    "Press Run pipelines to run them. Every stage output is kept with the analysis."
+)
+R_RUN = "Run pipelines"
+R_RUN_AGAIN = "Run again"
+R_RUN_AGAIN_NOTE = "Running again gives the same values and adds no new records."
+R_BACK = "Back to configuration"
+R_GO_ANALYSIS = "Go to analysis"
+R_GO_LOCKED = "Go to analysis opens once the pipelines have run."
+
+# progress, in the order the steps happen
+R_PROGRESS_TITLE = "Running the pipelines"
+R_PROGRESS_LOAD = "Reading the weather file"
+R_PROGRESS_SITE = "Setting up the site and the time offset"
+R_PROGRESS_HARDWARE = "Preparing the module and inverter"
+R_PROGRESS_PIPELINE = "Running pipeline {label}"
+R_PROGRESS_SAVE = "Saving the results"
+R_PROGRESS_READ_BACK = "Reading the saved stage outputs back"
+R_PROGRESS_DONE = "Done"
+
+R_FILE_MISSING = "The weather file stored for this analysis is no longer there. Go back to step 1 and upload it again."
+R_RUN_FAILED = "The run could not finish ({detail}). Check the inputs on steps 1 and 2 and try again."
+R_NOT_RUN_STORED = "This analysis has no stored run to open."
+R_NOT_SAVED = "The stage outputs of pipeline {label} could not be read back from the provenance store."
+
+R_BANNER_PASSED = "{n} pipelines ran · all checks passed"
+R_BANNER_NOT_PASSED = "{n} pipelines ran · {failed} did not pass every check"
+R_BANNER_SUB = "Every stage output is kept for the analysis."
+R_RUN_TIME = "Run time"
+
+# one card per pipeline
+R_PIPELINE = "Pipeline {label}"
+R_SAVED = "Stage outputs saved"
+R_PASSED = "Passed"
+R_NOT_PASSED = "Not passed"
+R_CHECK_LABELS = {
+    "decomposition": "DNI, DHI finite and ≥ 0",
+    "transposition": "POA irradiance finite and ≥ 0",
+    "temperature": "Cell temperature finite, ≥ air − 5 °C",
+    "dc": "DC power finite and ≥ 0",
+    "ac_not_exceeding_dc": "AC ≤ DC",
+    "all_finite": "Every output column finite",
+}
+
+# pipeline outputs
+R_OUT_TITLE = "Pipeline outputs"
+R_OUT_SUB = "What each pipeline produced at each stage, side by side."
+R_DOWNLOAD = "Download CSV"
+R_STAGE = "Stage"
+R_QUANTITY = "Quantity"
+R_PERIOD = "Period"
+R_PERIODS = {"day": "One day", "week": "One week", "month": "One month", "year": "Full year"}
+R_DATE = "Date"
+R_DATE_HELP = "The day, or the week or the month that contains this date."
+R_STAGE_SHORT = {
+    "decomposition": "Decomposition",
+    "transposition": "Transposition",
+    "temperature": "Cell temperature",
+    "dc": "DC power",
+    "ac": "AC power",
+}
+R_CHART_ALT = "Chart of the selected stage for pipelines A, B and C. A is a solid line with circles, B dashed with squares, C dotted with triangles."
+R_TABLE_WINDOW = "In the period shown"
+R_TOTAL_IRRADIATION = "Irradiation (kWh/m²)"
+R_TOTAL_ENERGY = "Energy (kWh)"
+R_MEAN_TEMP = "Mean over daylight hours (°C)"
+R_PEAK = "Peak ({unit})"
+R_MAX_TEMP = "Maximum in daylight hours (°C)"
+R_PER_DAY = "per day"
+R_PER_MONTH = "per month"
+R_HOURLY = "hourly"
+R_NO_DATA_IN_PERIOD = "This file has no rows in the period you chose."
+
+# one table for every stored output column: plain name and unit. A column that is not here is
+# shown by its stored key, with no unit (a unit is never guessed).
+COLUMN_INFO = {
+    "dni": ("DNI", "W/m²"),
+    "dhi": ("DHI", "W/m²"),
+    "aoi": ("Angle of incidence", "°"),
+    "poa_global": ("POA global", "W/m²"),
+    "poa_direct": ("POA direct", "W/m²"),
+    "poa_diffuse": ("POA diffuse", "W/m²"),
+    "poa_sky_diffuse": ("POA sky diffuse", "W/m²"),
+    "poa_ground_diffuse": ("POA ground-reflected", "W/m²"),
+    "temp_cell": ("Cell temperature", "°C"),
+    "i_dc": ("DC current", "A"),
+    "v_dc": ("DC voltage", "V"),
+    "p_dc": ("DC power", "W"),
+    "p_ac": ("AC power", "W"),
+}
+# the unit a yearly or period total has when the column's values are summed over time
+TOTAL_UNIT = {"W/m²": "kWh/m²", "W": "kWh"}
+
+# stage cards
+R_CARD_STAGE = "Stage"
+R_CARD_MODEL = "Model"
+R_CARD_OUTPUT = "Output (year)"
+R_CARD_CHECK = "Check"
+R_MEAN_DAYLIGHT = "Mean over daylight hours"
+R_DAYLIGHT_TIP = (
+    "Daylight means the sun is more than {margin:g}° above the horizon (true zenith under {zenith:g}°), "
+    "the same rule the comparison later uses."
+)
+R_DAYLIGHT_TIP_PLAIN = "Daylight means the sun is above the horizon, the same rule the comparison later uses."
+R_FOOTER_FINITE = "Every output column finite"
+
+# provenance summary (readable view)
+R_PROV_TITLE = "Provenance for this run"
+R_PROV_WEATHER = "Weather file"
+R_PROV_ROWS = "{rows:,} rows, {start} to {end} ({spacing})"
+R_PROV_SPACING_HOURLY = "hourly"
+R_PROV_SPACING_OTHER = "every {minutes:g} min"
+R_PROV_SITE = "Site"
+R_PROV_SITE_VALUE = "latitude {latitude:g}° ({lat_src}), longitude {longitude:g}° ({lon_src}), elevation {elevation:g} m ({elev_src})"
+R_PROV_OFFSET = "Time offset"
+R_PROV_TAU = "τ (threshold)"
+R_PROV_PVLIB = "pvlib version"
+R_PROV_STARTED = "Started"
+R_PROV_FINISHED = "Finished"
+R_PROV_SET = "Execution set"
+R_PROV_RECORDS = "{set} · {n} records"
+R_PROV_NOT_RECORDED = "not recorded"
+R_PROV_REASON = "reason: {reason}"
+
+# lineage (closed by default)
+R_LINEAGE_OPEN = "Show the provenance records"
+R_LINEAGE_NOTE = "One record per pipeline, read from what the run stored. Stages run in this order, each using what comes before it."
+R_LINEAGE_WEATHER = "Weather file"
+R_LINEAGE_CONFIG = "Configuration"
+R_LINEAGE_CONFIG_USED = "Every stage used this configuration."
+R_LINEAGE_CONFIG_USED_SOME = "Used by: {stages}."
+R_LINEAGE_SETTINGS = "Settings"
+R_LINEAGE_NO_SETTINGS = "No settings recorded beyond the model."
+R_LINEAGE_USED_WEATHER = "the weather file"
+R_LINEAGE_USED_STAGE = "the output of {stage} ({columns})"
+R_LINEAGE_USED_NOTHING = "nothing recorded"
+R_LINEAGE_STATEMENT = "{stage} ({model}) used {used} and produced {produced}, {rows:,} rows."
+R_LINEAGE_NO_WEATHER_LINK = (
+    "This stage also reads air temperature and wind speed from the weather file. The record does not carry that link."
+)
+R_LINEAGE_STAGE_NAMES = {
+    "decomposition": "Decomposition",
+    "transposition": "Transposition",
+    "temperature": "Cell temperature",
+    "dc": "DC power",
+    "ac": "AC power",
+}
+# plain names for stored settings; a key that is not here is shown as stored. A unit appears only
+# where the stored key carries one (its suffix).
+SETTING_LABELS = {
+    "surface_tilt_deg": "Tilt",
+    "surface_azimuth_deg": "Azimuth",
+    "albedo": "Albedo",
+    "albedo_source": "Albedo source",
+    "module_name": "Module",
+    "module_library": "Module library",
+    "inverter_name": "Inverter",
+    "inverter_library": "Inverter library",
+    "modules_per_string": "Modules per string",
+    "strings_per_inverter": "Strings per inverter",
+    "mounting_geometry": "Mounting geometry",
+    "mounting_geometry_source": "Mounting geometry source",
+    "mounting_construction": "Mounting construction",
+    "mounting_construction_source": "Mounting construction source",
+    "module_height_m": "Module height",
+}
+# only suffixes that mean one thing; "_s" is left out because it also ends names like R_s (a resistance)
+SETTING_UNIT_SUFFIX = (("_deg", "°"), ("_m", " m"), ("_h", " h"), ("_w_m2", " W/m²"))
+
+# technical identifiers (closed by default)
+R_IDS_OPEN = "Technical identifiers"
+R_IDS_NOTE = (
+    "These identifiers let a stored record and its data be matched byte for byte; they are for checking, not for reading."
+)
+R_PROV_RUN_ID = "Run ID"
+R_PROV_FILE_SHA = "File SHA-256"
+R_PROV_FILE_SHA_HELP = "Fingerprint of the file you uploaded, byte for byte."
+R_PROV_DATA_HASH = "Input data hash (provenance)"
+R_PROV_DATA_HASH_HELP = (
+    "Fingerprint of the weather data after it was read and prepared. The provenance records carry this one."
+)
+R_IDS_RECORD = "Record ID"
+R_IDS_STAGE_HASH = "{stage} output"

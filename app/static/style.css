@@ -442,3 +442,104 @@ div.st-key-continue_row [data-testid="stColumn"]:first-child { justify-content: 
 .stApp [data-testid="stSelectbox"] button[aria-label="Clear value"] { display: none; }
 .stApp [data-testid="stSelectbox"] input { font-size: 14px; }
 div.st-key-continue_row [data-testid="stPageLink"] a { color: var(--pv-teal); font-weight: 600; text-decoration: underline; }
+
+/* ---- Step 3 · Run & provenance (shapes from the Run mock-up) ------------------------------------------- */
+.pv-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; margin: 0; }
+div.st-key-card_run_empty, div.st-key-card_banner, div.st-key-card_outputs, div.st-key-card_prov { gap: 14px; }
+div.st-key-card_pipe_A, div.st-key-card_pipe_B, div.st-key-card_pipe_C { gap: 12px; padding: 22px; }
+.pv-banner-title { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; }
+.pv-runtime { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 13px; color: var(--pv-text-2); }
+.pv-runtime .pv-mono { font-size: 17px; color: var(--pv-text); }
+.pv-models { font-size: 13px; line-height: 1.6; color: var(--pv-text-2); margin: 8px 0 14px; }
+.pv-kv-list { display: flex; flex-direction: column; gap: 8px; font-size: 14px; }
+.pv-kv-list .pv-kv > span:first-child { color: var(--pv-text); }
+.pv-kv-detail { font-size: 13px; color: #8A1C1C; margin: -4px 0 0 0; }
+.pv-kv-total { border-top: 1px solid var(--pv-border-soft); padding-top: 8px; margin-top: 2px; font-weight: 600; }
+.pv-kv-total + .pv-kv-total { border-top: 0; padding-top: 0; margin-top: 0; }
+.pv-figure { font-size: 15px; font-weight: 500; }
+.pv-status { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; white-space: nowrap; }
+.pv-status-ok { color: #14532D; }
+.pv-status-bad { color: #8A1C1C; }
+
+/* outputs: stage buttons, period, chart beside its table */
+.stApp [data-testid="stButtonGroup"] button { min-height: 40px; font-size: 14px; font-weight: 600; border: 1px solid #C9C3B7; background: #FFFFFF; color: var(--pv-text); }
+.stApp [data-testid="stButtonGroup"] button[kind*="Active"], .stApp [data-testid="stButtonGroup"] button[aria-checked="true"], .stApp [data-testid="stButtonGroup"] button[aria-pressed="true"] {
+  background: var(--pv-teal-light); border-color: var(--pv-teal); color: var(--pv-teal-dark);
+}
+.pv-sum { display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.pv-sum-grid { display: grid; grid-template-columns: 1.6fr repeat(3, 1fr); font-size: 13px; border: 1px solid var(--pv-border-soft); border-radius: 10px; overflow: hidden; }
+.pv-sum-grid > span { padding: 8px 10px; border-top: 1px solid var(--pv-border-soft); display: flex; align-items: center; }
+.pv-sum-grid > span:nth-child(-n+4) { background: var(--pv-fill); border-top: 0; font-weight: 600; }
+.pv-sum-grid .pv-mono { font-size: 13px; justify-content: flex-end; }
+.pv-sum-label { color: var(--pv-text); }
+
+/* provenance */
+.pv-prov { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; row-gap: 12px; font-size: 14px; }
+.pv-prov-row { flex-direction: column; gap: 3px; align-items: flex-start; }
+.pv-prov-row > span:first-child { font-size: 13px; color: var(--pv-text-2); display: flex; flex-direction: column; gap: 2px; }
+.pv-prov-row small { font-size: 12px; color: var(--pv-text-2); }
+.pv-prov-value { font-size: 13px; color: var(--pv-text); word-break: break-all; }
+.pv-records { display: flex; flex-direction: column; gap: 14px; font-size: 12px; color: var(--pv-text); }
+.pv-record { display: flex; flex-direction: column; gap: 3px; word-break: break-all; }
+.pv-record b { font-family: var(--pv-sans); font-size: 14px; }
+.pv-record span { display: inline-block; min-width: 130px; font-family: var(--pv-sans); color: var(--pv-text-2); }
+div.st-key-run_foot { padding-top: 6px; }
+div.st-key-run_foot [data-testid="stColumn"]:last-child { align-items: flex-end; }
+div.st-key-run_foot a[data-testid="stPageLink-NavLink"] { color: var(--pv-teal); font-weight: 600; text-decoration: underline; }
+
+.pv-prov { align-items: start; }
+.pv-prov-row { justify-content: flex-start; }
+div.st-key-card_banner [data-testid="stColumn"]:last-child { align-items: flex-end; }
+div.st-key-run_foot [data-testid="stColumn"]:last-child { display: flex; flex-direction: column; }
+.stApp [data-testid="stButtonGroup"] button { padding: 0 12px; }
+.pv-kv-list .pv-kv > span:first-child { text-wrap: balance; }
+.pv-sum-grid { grid-template-columns: 1.15fr repeat(3, 1fr); }
+.pv-sum-grid > span { padding: 8px 6px; }
+.pv-sum-grid .pv-mono { font-size: 12px; }
+
+/* ---- Page 3: stage table in each card, banner, provenance ------------------------------------------- */
+div.st-key-card_banner { padding: 16px 20px; gap: 6px; }
+div.st-key-card_banner [data-testid="stColumn"]:last-child { align-items: flex-end; gap: 6px; }
+.pv-banner-right { display: flex; justify-content: flex-end; width: 100%; }
+.pv-runtime { flex-direction: row; align-items: baseline; gap: 8px; }
+div.st-key-card_pipe_A, div.st-key-card_pipe_B, div.st-key-card_pipe_C { gap: 8px; padding: 16px 20px 14px; }
+.pv-stage-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.pv-stage-table th { text-align: left; font-size: 13px; font-weight: 600; color: var(--pv-text-2); padding: 6px 10px; background: var(--pv-fill); }
+.pv-stage-table th:first-child { border-radius: 8px 0 0 8px; }
+.pv-stage-table th:last-child { border-radius: 0 8px 8px 0; }
+.pv-stage-table td { padding: 6px 10px; border-top: 1px solid var(--pv-border-soft); height: 34px; vertical-align: middle; }
+.pv-stage-table tbody tr:first-child td { border-top: 0; }
+.pv-stage-table .pv-num { text-align: right; }
+.pv-stage-table td:nth-child(2) { font-size: 13px; }
+.pv-out { display: inline-block; margin-left: 18px; white-space: nowrap; }
+.pv-out b { font-weight: 500; }
+.pv-unit { color: var(--pv-text-2); font-size: 12px; }
+.pv-tip { border-bottom: 1px dotted var(--pv-text-2); cursor: help; }
+.pv-check-what { margin-left: 10px; color: var(--pv-text-2); font-size: 13px; }
+.pv-card-foot { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--pv-text-2); padding: 2px 10px 0; }
+.pv-card-foot b { color: var(--pv-text); font-weight: 500; }
+.pv-lineage { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.pv-lineage h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.pv-chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pv-chip { border: 1px solid var(--pv-border-soft); background: var(--pv-fill); border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+.pv-chip .pv-mono { font-size: 12px; color: var(--pv-teal-dark); }
+.pv-arrow { color: var(--pv-teal); font-weight: 600; }
+.pv-lin-block { border-top: 1px solid var(--pv-border-soft); padding: 8px 0 4px; font-size: 13px; }
+.pv-lin-block h4 { margin: 0 0 3px; font-size: 14px; font-weight: 600; font-family: var(--pv-sans); }
+.pv-lin-block p { margin: 0 0 4px; line-height: 1.5; }
+.pv-lin-note { color: var(--pv-text-2); font-style: normal; }
+.pv-lin-settings { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 3px 22px; }
+.pv-lin-settings > div { display: flex; justify-content: space-between; gap: 10px; }
+.pv-lin-settings span { color: var(--pv-text-2); }
+.pv-lin-settings b { font-family: var(--pv-mono); font-weight: 500; font-size: 12px; text-align: right; word-break: break-word; }
+.pv-runtime-inline { margin-left: 14px; color: var(--pv-text-2); }
+.pv-runtime-inline .pv-mono { color: var(--pv-text); font-size: 13px; }
+div.st-key-card_banner [data-testid="stColumn"]:last-child { justify-content: center; }
+.pv-lin-settings > div { flex-wrap: wrap; align-items: baseline; }
+.pv-lin-settings span { flex: 1 1 120px; }
+.pv-lin-settings b { flex: 0 1 auto; min-width: 3ch; white-space: normal; overflow-wrap: anywhere; }
+.pv-stage-table td { padding: 3px 10px; height: 30px; }
+.pv-stage-table th { padding: 5px 10px; }
+div.st-key-card_pipe_A, div.st-key-card_pipe_B, div.st-key-card_pipe_C { gap: 4px; padding: 14px 20px 12px; }
+.pv-card-foot { padding-top: 0; }
+.pv-record span { min-width: 170px; }

@@ -30,6 +30,7 @@ import json
 import math
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -336,8 +337,14 @@ class PipelineRunResult:
 
 
 def step_run_pipelines(
-    config: AnalysisConfig, hardware: HardwareResult, defaults: dict, analysis_id: str
+    config: AnalysisConfig,
+    hardware: HardwareResult,
+    defaults: dict,
+    analysis_id: str,
+    progress: Callable[[str], None] | None = None,
 ) -> PipelineRunResult:
+    """progress: optional; called with a pipeline's label just before it runs (the
+    interface shows it). It changes nothing about the run."""
     configs = _build_pipeline_configs(config)
     results: dict[str, PipelineResult] = {}
     checks: dict[str, dict[str, ValidationResult]] = {}
@@ -345,6 +352,8 @@ def step_run_pipelines(
     record_ids: list[str] = []
 
     for label, cfg in configs.items():
+        if progress is not None:
+            progress(label)
         shared = shared_inputs_for(cfg, hardware.shared_cec, hardware.shared_adr)
         try:
             result = run_pipeline(cfg, shared, defaults)

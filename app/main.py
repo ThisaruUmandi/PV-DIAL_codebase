@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
 import streamlit as st
 
 from app import components, state, store, wording
-from app.screens import config_pipelines, data_site, home, past, step_skeleton
+from app.screens import config_pipelines, data_site, home, past, run_page, step_skeleton
 
 
 def _step_page(step: int):
@@ -24,6 +24,8 @@ def _step_page(step: int):
             data_site.render()
         elif step == 2:
             config_pipelines.render()
+        elif step == 3:
+            run_page.render()
         else:
             step_skeleton.render(step)
 
