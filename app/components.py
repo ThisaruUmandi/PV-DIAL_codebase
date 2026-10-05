@@ -193,6 +193,39 @@ def locked_panel(step: int) -> None:
             st.page_link(previous, label=f"Go to step {step - 1}")
 
 
+def readonly_panel(step: int) -> None:
+    """Steps 1 to 5 of an analysis opened from Past analyses: one plain panel instead of the controls.
+    Step 5 also says how to try a substitution (Duplicate on Past analyses)."""
+    text = wording.RO_PANEL_REEXEC if step == 5 else wording.RO_PANEL_TEXT
+    with st.container(key="lock"):
+        st.html(f'<div class="pv-lock-title">{escape(wording.RO_PANEL_TITLE)}</div><p class="pv-lock-text">{escape(text)}</p>')
+        st.page_link(PAGES["6"], label=wording.RO_GO_REPORT)
+
+
+def start_new_analysis(key: str, help_text: str | None = None) -> None:
+    """The Start new analysis button. With an analysis open in the session it asks first; the current
+    analysis is closed and stays saved. Without one it starts at once."""
+    ss = st.session_state
+    asking = f"{key}_asking"
+    if ss.get(asking):
+        st.html(f'<p class="pv-ask">{escape(wording.HOME_NEW_ASK)}</p>')
+        yes, no = st.columns(2)
+        with yes:
+            go = st.button(wording.HOME_NEW_YES, key=f"{key}_yes", type="primary")
+        with no:
+            st.button(wording.HOME_NEW_NO, key=f"{key}_no", on_click=lambda: ss.__setitem__(asking, False))
+    else:
+        go = st.button(
+            wording.START_NEW_ANALYSIS, key=key, type="primary",
+            on_click=lambda: ss.__setitem__(asking, bool(ss.get("analysis_id"))),
+        )
+        go = go and not ss.get(asking)
+    if go:
+        ss[asking] = False
+        state.new_analysis(ss)
+        st.switch_page(PAGES["1"])
+
+
 def _confirm() -> None:
     state.confirm_pending(st.session_state)
 

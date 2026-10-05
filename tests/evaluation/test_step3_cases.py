@@ -5,16 +5,15 @@ two can't drift apart. Real Colombo file, real pvlib runs -- slow.
 
 import pytest
 
-from pvdials.config import load_defaults
-from pvdials.types import Stage
-from pvdials.warning_filter import ChandrupatlaWarningFilter
-
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.step3_perturbation_cases import (
     case1_phase1,
     case2_one_perturbed_stage,
     case3_two_multiplicative,
 )
+from pvdials.config import load_defaults
+from pvdials.types import Stage
+from pvdials.warning_filter import ChandrupatlaWarningFilter
 
 pytestmark = [pytest.mark.slow, pytest.mark.filterwarnings("ignore::RuntimeWarning")]
 

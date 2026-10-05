@@ -246,16 +246,74 @@ def list_analyses_summary(
     return summaries
 
 
-def duplicate_analysis(analysis_id: str, new_id: str | None = None) -> str:
+_OVERVIEW_SECTIONS = ("inputs", "phase1", "phase2", "phase3", "reexec", "pipelines", "run_info")
+
+
+def list_analyses_overview(search: str | None = None, order: str = "newest") -> list[dict[str, Any]]:
+    """Read-only rows for the Home and Past analyses lists. Unlike list_analyses_summary it says which
+    sections the row holds and carries what a caller needs to say how far the analysis got without
+    trusting the status text: `sections` (the stored sections that are not null), `input_keys` (the
+    keys of the stored inputs), `weather_file` (as stored) and the Phase 1, 2 and 3 documents as stored.
+    Orderable by date or name only; any other `order` is refused. Writes nothing.
+
+    search matches the analysis name, the weather file name or the name the file was uploaded under
+    (case-insensitive).
+    """
+    if order not in _ORDERS:
+        raise ValueError(f"order must be one of {sorted(_ORDERS)}")
+    where, params = "", []
+    if search:
+        where = " WHERE (a.name ILIKE %s OR a.inputs->>'weather_file' ILIKE %s OR a.inputs->'weather'->>'name' ILIKE %s)"
+        params = [f"%{search}%"] * 3
+    present = ", ".join(f"a.{section} IS NOT NULL" for section in _OVERVIEW_SECTIONS)
+    sql = (
+        "SELECT a.id, a.name, a.created_at, a.updated_at, a.status, a.inputs->>'weather_file', "
+        f"a.inputs->'weather'->>'name', a.phase1, a.phase2, a.phase3, a.inputs, {present} "
+        f"FROM analyses a{where} ORDER BY {_ORDERS[order]}"
+    )
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+
+    overview = []
+    for (
+        analysis_id, name, created_at, updated_at, status, weather_file, weather_name, phase1, phase2, phase3, inputs, *flags
+    ) in rows:
+        overview.append(
+            {
+                "id": analysis_id,
+                "name": name,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "status": status,
+                "weather_file": weather_file,
+                "weather_name": weather_name,
+                "sections": [s for s, held in zip(_OVERVIEW_SECTIONS, flags, strict=True) if held],
+                "input_keys": sorted(inputs) if isinstance(inputs, dict) else [],
+                "phase1": phase1,
+                "phase2": phase2,
+                "phase3": phase3,
+            }
+        )
+    return overview
+
+
+def duplicate_analysis(analysis_id: str, new_id: str | None = None, name: str | None = None) -> str:
     """A new analysis with the same inputs and nothing else: new id, status
     'started', no results, no provenance links. The saved original is never
     touched. Returns the new id.
+
+    name: the copy's name (default "<name> (copy)"); when given it is also the name inside the
+    copy's inputs, so the pages that read the inputs show the same name as the list does.
     """
     source = load_analysis(analysis_id)
     if source is None:
         raise ValueError(f"No saved analysis with id {analysis_id!r}.")
     new_id = new_id or uuid.uuid4().hex
-    save_analysis(new_id, f"{source['name']} (copy)", "started", source["inputs"])
+    inputs = source["inputs"]
+    if name is not None and isinstance(inputs, dict):
+        inputs = {**inputs, "name": name}
+    save_analysis(new_id, name or f"{source['name']} (copy)", "started", inputs)
     return new_id
 
 

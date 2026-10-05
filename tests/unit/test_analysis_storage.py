@@ -21,6 +21,7 @@ from pvdials.provenance.analyses import (
     NOT_RECORDED,
     duplicate_analysis,
     linked_records,
+    list_analyses_overview,
     list_analyses_summary,
     load_analysis,
     load_stage_series,
@@ -207,6 +208,53 @@ def test_summary_list_filters_and_orders_by_date_or_name_only():
         list_analyses_summary(order="disagreement")
 
 
+# --- overview list (Home and Past analyses) ----------------------------------------
+
+
+def test_overview_says_which_sections_exist_and_writes_nothing():
+    row = _save_colombo_row()
+    save_analysis("early", "Early", "load_done", {"name": "Early", "weather_file": "x/early.csv"})
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM analyses")
+        n_before = cur.fetchone()[0]
+        cur.execute("SELECT id, status, updated_at FROM analyses ORDER BY id")
+        state_before = cur.fetchall()
+
+    rows = {r["id"]: r for r in list_analyses_overview()}
+
+    assert set(rows) == {row["id"], "early"}
+    thesis, early = rows[row["id"]], rows["early"]
+    assert thesis["sections"] == ["inputs", "phase1", "phase2", "phase3", "pipelines"]  # no reexec, no run_info
+    assert early["sections"] == ["inputs"]
+    assert "pipelines" in thesis["input_keys"] and "tau" not in thesis["input_keys"]
+    assert early["input_keys"] == ["name", "weather_file"]
+    assert thesis["phase1"]["A-B"]["outcome"] == 3 and early["phase1"] is None
+    assert thesis["weather_file"].endswith("tmy_6.944_79.856_2005_2020.csv") and thesis["weather_name"] is None
+    assert list_analyses_overview(search="uploaded name") == []
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT count(*) FROM analyses")
+        assert cur.fetchone()[0] == n_before
+        cur.execute("SELECT id, status, updated_at FROM analyses ORDER BY id")
+        assert cur.fetchall() == state_before
+
+
+def test_overview_orders_by_date_or_name_only_and_searches_name_or_file():
+    save_analysis("1", "beta", "done", {"weather_file": "x/one.csv"})
+    save_analysis("2", "Alpha", "load_done", {"weather_file": "x/two.csv"})
+    save_analysis("3", "gamma", "done", {"weather_file": "x/three.csv"})
+    assert [r["id"] for r in list_analyses_overview(order="newest")] == ["3", "2", "1"]
+    assert [r["id"] for r in list_analyses_overview(order="oldest")] == ["1", "2", "3"]
+    assert [r["name"] for r in list_analyses_overview(order="name")] == ["Alpha", "beta", "gamma"]
+    assert [r["id"] for r in list_analyses_overview(search="TWO")] == ["2"]
+    assert [r["id"] for r in list_analyses_overview(search="alp")] == ["2"]
+    assert list_analyses_overview(search="nothing like this") == []
+    save_analysis("4", "delta", "done", {"weather_file": "data/uploads/ab12.csv", "weather": {"name": "Kandy TMY.csv"}})
+    (named,) = list_analyses_overview(search="kandy")  # the name the file was uploaded under
+    assert named["id"] == "4" and named["weather_name"] == "Kandy TMY.csv" and named["weather_file"].endswith("ab12.csv")
+    with pytest.raises(ValueError):
+        list_analyses_overview(order="disagreement")
+
+
 # --- duplicate ---------------------------------------------------------------------
 
 
@@ -227,6 +275,16 @@ def test_duplicate_copies_inputs_only_and_leaves_the_original_untouched():
     assert {k: after[k] for k in after if k != "updated_at"} == {k: before[k] for k in before if k != "updated_at"}
     with pytest.raises(ValueError):
         duplicate_analysis("does-not-exist")
+
+
+def test_duplicate_with_a_name_sets_it_in_the_row_and_in_the_inputs():
+    row = _save_colombo_row()
+    new_id = duplicate_analysis(row["id"], name="colombo_thesis_run (copy 2)")
+    copy_row = load_analysis(new_id)
+    assert copy_row["name"] == copy_row["inputs"]["name"] == "colombo_thesis_run (copy 2)"
+    assert {k: v for k, v in copy_row["inputs"].items() if k != "name"} == {
+        k: v for k, v in row["inputs"].items() if k != "name"
+    }
 
 
 # --- stage series from provenance ----------------------------------------------------

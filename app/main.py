@@ -14,47 +14,45 @@ if str(ROOT) not in sys.path:
 
 import streamlit as st
 
-from app import components, state, store, wording
-from app.screens import (
-    analysis_page,
-    config_pipelines,
-    data_site,
-    home,
-    past,
-    reexec_page,
-    report_page,
-    run_page,
-    step_skeleton,
-)
+from app import components, session_load, state, store, wording
+from app.page_map import build_pages
+
+# the URL carries the analysis (a) and, for one opened from Past analyses, its mode (ro), so a browser
+# refresh keeps both; nothing else is kept there
+_QUERY_KEYS = ("a", "ro")
 
 
-def _step_page(step: int):
-    def page() -> None:
-        if step == 1:
-            data_site.render()
-        elif step == 2:
-            config_pipelines.render()
-        elif step == 3:
-            run_page.render()
-        elif step == 4:
-            analysis_page.render()
-        elif step == 5:
-            reexec_page.render()
-        elif step == 6:
-            report_page.render()
-        else:
-            step_skeleton.render(step)
-
-    page.__name__ = f"step_{step}"
-    return page
+def _wanted_query(ss) -> dict[str, str]:
+    if not session_load.valid_id(ss.get("analysis_id")):
+        return {}
+    return {"a": ss["analysis_id"], **({"ro": "1"} if ss.get("readonly") else {})}
 
 
-def build_pages() -> dict[str, st.Page]:
-    pages = {"home": st.Page(home.render, title=wording.HOME_TITLE, url_path="home", default=True)}
-    for step, title in wording.STEP_TITLES.items():
-        pages[str(step)] = st.Page(_step_page(step), title=title, url_path=f"step{step}")
-    pages["past"] = st.Page(past.render, title=wording.PAST_TITLE, url_path="past")
-    return pages
+def _sync_query(ss) -> None:
+    wanted = _wanted_query(ss)
+    if {key: st.query_params.get(key) for key in _QUERY_KEYS if key in st.query_params} != wanted:
+        st.query_params.from_dict(wanted)
+
+
+def _restore_from_url(ss) -> str | None:
+    """The first run of a session: a refreshed page arrives with ?a=<id>. Take that analysis (and its
+    mode) back from the store. An id that is malformed or unknown gives Home with one plain message.
+    Returns the page key to go to, or None."""
+    ss["url_checked"] = True
+    raw = st.query_params.get("a")
+    if raw is None:
+        return None
+    try:
+        if not session_load.valid_id(raw):
+            raise session_load.LoadError(wording.PAST_NOT_FOUND)
+        if st.query_params.get("ro") == "1":
+            session_load.open_readonly(ss, raw)
+            return None
+        return "1" if session_load.restore(ss, raw).message else None
+    except session_load.LoadError as exc:
+        ss["flash"] = str(exc)
+        st.query_params.clear()
+        return "home"
 
 
 def main() -> None:
@@ -67,6 +65,11 @@ def main() -> None:
     current = next(key for key, page in pages.items() if page.title == selected.title)
 
     connected = store.db_reachable()
+    if connected and not st.session_state.get("url_checked"):
+        go = _restore_from_url(st.session_state)
+        if go is not None:
+            st.switch_page(components.PAGES[go])
+    _sync_query(st.session_state)
     components.sidebar(current, connected)
 
     if not connected:

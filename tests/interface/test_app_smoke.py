@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from app import wording
+from tests.interface.test_app_page3 import _clean
 
 
 def _page_text(at) -> str:
@@ -19,6 +20,7 @@ MAIN = str(Path(__file__).resolve().parents[2] / "app" / "main.py")
 
 
 def test_main_runs_and_shows_home_without_an_exception():
+    _clean()  # an empty store: Home says how to start
     at = AppTest.from_file(MAIN, default_timeout=30).run()
     assert not at.exception
     assert [t.value for t in at.title] == [wording.HOME_HEADLINE]

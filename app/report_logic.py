@@ -104,6 +104,11 @@ class Section:
     blocks: list[Any]
 
 
+def format_saved(saved: datetime) -> str:
+    """A saved time as the Report and the lists show it: UTC, day month year, hours and minutes."""
+    return saved.astimezone(UTC).strftime("%d %b %Y %H:%M UTC")
+
+
 @dataclass(frozen=True)
 class Report:
     analysis_id: str
@@ -119,7 +124,7 @@ class Report:
 
     @property
     def saved_text(self) -> str:
-        return self.saved.astimezone(UTC).strftime("%d %b %Y %H:%M UTC")
+        return format_saved(self.saved)
 
 
 # --- Small shared facts -------------------------------------------------------------------------------------------------

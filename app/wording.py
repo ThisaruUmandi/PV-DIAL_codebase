@@ -24,7 +24,7 @@ STEP_SUMMARIES = {
     2: "One model per stage for A, B and C.",
     3: "Run the pipelines, see their outputs.",
     4: "Phase 1, then Phase 2 and 3.",
-    5: "Swap one model at the flagged stage.",
+    5: "Swap one model at the localised stage.",
     6: "The whole analysis on one page, to download.",
 }
 HOME_TITLE = "Home"
@@ -126,9 +126,9 @@ HOME_NOT_SHOWN = (
     "Choosing between configurations stays with you."
 )
 HOME_BEFORE_YOU_START = (
-    "An hourly PVGIS TMY file (CSV) with GHI, T2m, WS10m and SP",
+    "An hourly PVGIS TMY file (CSV) with GHI, T2m and WS10m. SP is optional",
     "Tilt, azimuth and albedo for the array",
-    "A module and inverter from the CEC database",
+    "A module and inverter from the CEC database, and the array layout (modules per string, strings per inverter)",
     "The module mounting height",
 )
 HOME_SAVED_NOTE = (
@@ -192,6 +192,56 @@ STORE_NOT_CONNECTED = "Provenance store: not connected"
 TAU_FOOTER = "τ = {value:g} ({source})"
 PVLIB_FOOTER = "pvlib {version}"
 SAVED_WORK = "Saved work"
+
+# --- Past analyses, and the recent rows on Home ------------------------------------------------------
+PAST_INTRO = "Every analysis you have started, saved in the provenance store."
+PAST_SEARCH = "Search"
+PAST_SEARCH_PLACEHOLDER = "Name or weather file"
+PAST_STATUS = "Status"
+PAST_FILTERS = (("all", "All"), ("complete", "Complete"), ("stopped", "Stopped"))
+PAST_ORDER = "Order"
+PAST_ORDERS = (("newest", "Newest first"), ("oldest", "Oldest first"), ("name", "Name A–Z"))
+PAST_HEADERS = ("Analysis", "Saved", "Phase 1 outcome by pair", "Status", "Actions")
+PAST_NO_MATCH = "No analysis matches your search."
+PAST_COMPLETE = "Complete"
+PAST_STOPPED = "Stopped at step {n}"
+PAST_NOT_RUN_YET = "Not run yet"
+PAST_NOT_COMPUTABLE = "not computable"
+PAST_OUTCOME_PAIR = "{pair} {outcome}"
+PAST_OUTCOME_JOIN = " · "
+PAST_FILE_LINE = "{file}"
+PAST_OPEN = "Open"
+PAST_CONTINUE = "Continue"
+PAST_DUPLICATE = "Duplicate"
+PAST_ACTION_LABEL = "{action} {name}"
+PAST_FOOTER = (
+    ("Open", "shows a finished analysis on the Report page, read-only."),
+    ("Continue", "reopens an unfinished analysis at the step where it stopped."),
+    ("Duplicate", "starts a new analysis with the same inputs. Saved analyses are never edited."),
+)
+PAST_ORDER_NOTE = "Listed by date or name only — never by amount of disagreement."
+PAST_CANNOT_CONTINUE = "Saved without the inputs needed to continue it."
+PAST_FILE_MISSING = "The weather file {name} is no longer stored. Upload it again on step 1."
+PAST_FILE_NOT_RECORDED = "The weather file is not recorded for this analysis. Upload one on step 1."
+PAST_FILE_WRONG = "That is not the file this analysis was run on. Upload {name} again, or choose Duplicate on Past analyses to start a new analysis with another file."
+PAST_RESUMED = "The analysis is loaded again with that file."
+PAST_NOT_FOUND = "That analysis could not be found. Choose one from Past analyses."
+PAST_LOAD_FAILED = "That analysis could not be opened: {detail}."
+PAST_PROGRESS_LOAD = "Loading the saved analysis…"
+PAST_PROGRESS_RUN = "Reading the saved run…"
+PAST_DUPLICATED = "Saved a copy as {name}. Step 1 holds the same inputs; nothing has been run."
+HOME_NEW_ASK = "Start a new analysis? The current analysis is closed and stays saved."
+HOME_NEW_YES = "Yes, start a new analysis"
+HOME_NEW_NO = "Cancel"
+
+# --- Read-only mode (an analysis opened from Past analyses) ------------------------------------------------
+RO_PANEL_TITLE = "Read-only"
+RO_PANEL_TEXT = "This analysis was opened from Past analyses. Nothing on this step can be run or changed."
+RO_PANEL_REEXEC = (
+    "This analysis was opened from Past analyses. Nothing on this step can be run or changed. "
+    "To try a substitution, choose Duplicate on Past analyses."
+)
+RO_GO_REPORT = "Go to the Report"
 
 # --- Page 1 · Data & site ----------------------------------------------------------------------
 D_NAME_LABEL = "Analysis name"

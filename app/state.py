@@ -82,7 +82,7 @@ def init_state(ss: MutableMapping) -> None:
 
 # Widget state is kept per page under these prefixes; a new analysis must not inherit it.
 _PAGE_WIDGET_PREFIXES = ("w1_", "w2_", "w3_", "w4_", "w5_", "w6_")
-_PAGE_TRANSIENT = ("upload_n", "upload_problem", "_ingest_new", "cancel_note")
+_PAGE_TRANSIENT = ("upload_n", "upload_problem", "_ingest_new", "cancel_note", "awaiting_file", "run_problem", "p3_problem")
 
 
 def new_analysis(ss: MutableMapping) -> None:

@@ -12,7 +12,7 @@ from html import escape
 
 import streamlit as st
 
-from app import components, services, state, wording
+from app import components, services, session_load, state, wording
 from pvdials.analysis import AnalysisError
 from pvdials.dla.metrics import resolve_tau
 from pvdials.physics.hardware import CEC, CEC_INVERTER, list_inverter_names, list_module_names
@@ -155,6 +155,14 @@ def _uploaded() -> None:
     if not ingest.usable:
         ss["upload_problem"] = ingest.problem
         ss["upload_n"] += 1
+        return
+    if ss.get("awaiting_file"):  # an analysis waiting for its file: only that file is accepted
+        problem = session_load.resume_after_upload(ss, ingest)
+        if problem:
+            ss["upload_problem"] = problem
+            ss["upload_n"] += 1
+        else:
+            ss["_resume"] = {"id": ss["awaiting_file"]["analysis_id"], "file": ingest.stored_path}
         return
     weather = ss.get("weather")
     if weather and weather["sha256"] == ingest.sha256:
@@ -395,8 +403,23 @@ def _defaults() -> dict:
     return load_defaults()
 
 
+def _resume(ss) -> None:
+    """The file an analysis was waiting for is back: load the analysis again, now that its file is there."""
+    waiting = ss.pop("_resume", None)
+    if not waiting:
+        return
+    try:
+        landing = session_load.restore(ss, waiting["id"], file_path=waiting["file"])
+    except session_load.LoadError as exc:
+        ss["upload_problem"] = str(exc)
+        return
+    ss["flash"] = wording.PAST_RESUMED
+    st.switch_page(components.PAGES[landing.page])
+
+
 def render() -> None:
     ss = st.session_state
+    _resume(ss)
     init_widgets(ss)
     sync(ss)
     components.step_header(1)
