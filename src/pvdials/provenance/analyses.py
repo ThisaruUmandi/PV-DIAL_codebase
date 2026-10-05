@@ -141,6 +141,33 @@ def records_for_analysis(analysis_id: str) -> list[dict]:
     return [row[0] for row in rows]
 
 
+_EXECUTION_SET_ORDER = ("original", "derived", "reexec")
+
+
+def linked_records(analysis_id: str) -> list[dict[str, Any]]:
+    """Every provenance record linked to this analysis, as stored and read-only: record_id, execution_set,
+    config_label and the PROV-JSON document unchanged. Fixed order: ORIGINAL, then DERIVED, then REEXEC;
+    within a set by label, then record id. (records_for_analysis gives the documents alone.)"""
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT pr.id, pr.execution_set, pr.config_label, pr.document FROM provenance_records pr "
+            "JOIN analysis_records ar ON ar.record_id = pr.id WHERE ar.analysis_id = %s",
+            (analysis_id,),
+        )
+        rows = cur.fetchall()
+    records = [
+        {"record_id": rid, "execution_set": es, "config_label": label, "document": document}
+        for rid, es, label, document in rows
+    ]
+
+    def rank(record: dict[str, Any]) -> tuple[int, str, str]:
+        es = record["execution_set"]
+        return (_EXECUTION_SET_ORDER.index(es) if es in _EXECUTION_SET_ORDER else len(_EXECUTION_SET_ORDER),
+                record["config_label"], record["record_id"])
+
+    return sorted(records, key=rank)
+
+
 def recorded(analysis: dict[str, Any], section: str, *keys: str) -> Any:
     """analysis[section][keys...], or NOT_RECORDED if any step of the path is
     absent or null -- how a row saved before tau / run_info / weather details

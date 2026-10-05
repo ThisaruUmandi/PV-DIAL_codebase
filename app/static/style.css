@@ -596,3 +596,14 @@ div.st-key-card_empty5 { background: var(--pv-card); border: 1px solid var(--pv-
 .pv-sub { display: block; font-size: 11px; font-weight: 400; color: var(--pv-text-2); margin-top: 2px; }
 .pv-attempts th, .pv-attempts td { font-size: 13px; }
 div.st-key-card_result { gap: 12px; }
+
+/* ---- Step 6 · Report ------------------------------------------------------------------------------------------------------ */
+div.st-key-card_rp_id { padding: 14px 20px; gap: 4px; }
+.pv-rp-id { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 15px; }
+.pv-rp-readonly { font-size: 13px; color: var(--pv-text-2); }
+div[class*="st-key-card_rp_"] { gap: 12px; }
+.pv-rp-lines { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.pv-rp-line { display: grid; grid-template-columns: 200px 1fr 220px; gap: 12px; padding: 8px 12px; border: 1px solid var(--pv-border-soft); border-radius: 8px; }
+.pv-rp-h3 { margin: 12px 0 2px; font-size: 14px; font-weight: 600; }
+div.st-key-rp_foot { padding-top: 6px; }
+div.st-key-rp_foot a[data-testid="stPageLink-NavLink"] { color: var(--pv-teal); font-weight: 600; text-decoration: underline; }

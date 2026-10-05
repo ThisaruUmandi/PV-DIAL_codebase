@@ -8,7 +8,15 @@ import altair as alt
 import pandas as pd
 
 from app import wording
-from app.analysis_logic import PHI_UNIT, PairView, Phase2View, Phase3View, fmt_nrmsd, fmt_watts
+from app.analysis_logic import (
+    PHI_UNIT,
+    PairView,
+    Phase2View,
+    Phase3View,
+    fmt_nrmsd,
+    fmt_share,
+    fmt_watts,
+)
 from app.reexec_logic import AttemptView
 
 _INK = "#1F2328"
@@ -189,12 +197,16 @@ def waterfall_frame(view: Phase3View) -> pd.DataFrame:
                 "stage": row.label.split(" · ", 1)[1],
                 "start": start, "end": end, "value": row.phi_final,
                 "text": wording.P4_P3_BAR_SAME if row.same_model else fmt_watts(row.phi_final),
+                "label": wording.P4_P3_BAR_SAME.replace(" ", "\n") if row.same_model else fmt_watts(row.phi_final),
                 "kind": "stage",
             }
         )
         running = end
     total = wording.P4_P3_TOTAL_BAR.format(a=a, b=b)
-    rows.append({"stage": total, "start": 0.0, "end": view.rmsd_ab, "value": view.rmsd_ab, "text": fmt_watts(view.rmsd_ab), "kind": "total"})
+    rows.append(
+        {"stage": total, "start": 0.0, "end": view.rmsd_ab, "value": view.rmsd_ab, "text": fmt_watts(view.rmsd_ab),
+         "label": fmt_watts(view.rmsd_ab), "kind": "total"}
+    )
     return pd.DataFrame(rows)
 
 
@@ -203,7 +215,8 @@ def waterfall(view: Phase3View) -> alt.Chart:
     frame = waterfall_frame(view)
     order = list(frame["stage"])
     x = alt.X("stage:N", title=None, scale=alt.Scale(domain=order),
-              axis=alt.Axis(labelAngle=0, labelFont="IBM Plex Sans", labelColor=_INK, labelOverlap=False, labelFontSize=11))
+              axis=alt.Axis(labelAngle=-35, labelAlign="right", labelBaseline="middle", labelFont="IBM Plex Sans",
+                            labelColor=_INK, labelOverlap=False, labelFontSize=11, labelLimit=0))
     low = min(0.0, float(frame[["start", "end"]].min().min()))
     high = max(0.0, float(frame[["start", "end"]].max().max()))
     room = (high - low) * 0.14 or 1.0  # space for the value printed on the tallest and the lowest bar
@@ -217,11 +230,11 @@ def waterfall(view: Phase3View) -> alt.Chart:
         color=alt.condition(alt.datum.kind == "total", alt.value(_INK), alt.value(_TEAL)),
     )
     above = alt.Chart(frame).transform_filter(alt.datum.value >= 0).mark_text(
-        font=_MONO, fontSize=12, color=_INK, baseline="bottom", dy=-4
-    ).encode(x=x, y="end:Q", text="text:N")
+        font=_MONO, fontSize=12, color=_INK, baseline="bottom", dy=-4, lineBreak="\n"
+    ).encode(x=x, y="end:Q", text="label:N")
     below = alt.Chart(frame).transform_filter(alt.datum.value < 0).mark_text(
-        font=_MONO, fontSize=12, color=_INK, baseline="top", dy=4
-    ).encode(x=x, y="end:Q", text="text:N")
+        font=_MONO, fontSize=12, color=_INK, baseline="top", dy=4, lineBreak="\n"
+    ).encode(x=x, y="end:Q", text="label:N")
     zero = alt.Chart(pd.DataFrame({"zero": [0]})).mark_rule(color="#C9C3B7").encode(y="zero:Q")
     return (
         alt.layer(zero, bars, above, below).properties(height=280)
@@ -230,11 +243,15 @@ def waterfall(view: Phase3View) -> alt.Chart:
     )
 
 
-def attempt_frame(view: AttemptView) -> pd.DataFrame:
-    """What the attempt chart draws and the table beside it prints: nRMSD by stage, before and after."""
+def attempt_frame(view: AttemptView, after_label: str | None = None, first_stage: str | None = None) -> pd.DataFrame:
+    """What the attempt chart draws and the table beside it prints: nRMSD by stage, before and after. The report
+    names the second series after the confirmed model and starts at the localised stage (first_stage)."""
     rows = []
+    stages = list(wording.STAGE_KEYS)
     for row in view.rows:
-        for series, value in ((wording.RX_COL_BEFORE, row.before), (wording.RX_COL_AFTER, row.after)):
+        if first_stage is not None and stages.index(row.stage) < stages.index(first_stage):
+            continue
+        for series, value in ((wording.RX_COL_BEFORE, row.before), (after_label or wording.RX_COL_AFTER, row.after)):
             rows.append(
                 {
                     "stage": wording.STAGE_NAME[row.stage], "series": series, "nrmsd": value, "text": fmt_nrmsd(value),
@@ -243,15 +260,18 @@ def attempt_frame(view: AttemptView) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def attempt_chart(view: AttemptView, tau_label: str, top: float) -> alt.Chart:
+def attempt_chart(
+    view: AttemptView, tau_label: str, top: float, after_label: str | None = None, first_stage: str | None = None
+) -> alt.Chart:
     """Before (dashed, squares) and after (solid, circles) by stage, with τ as a horizontal line. The vertical
     range is the one `top` gives, the same for every attempt shown, so charts can be compared."""
-    frame = attempt_frame(view)
-    names = [wording.RX_COL_BEFORE, wording.RX_COL_AFTER]
+    frame = attempt_frame(view, after_label, first_stage)
+    names = [wording.RX_COL_BEFORE, after_label or wording.RX_COL_AFTER]
+    stage_domain = [wording.STAGE_NAME[k] for k in wording.STAGE_KEYS[wording.STAGE_KEYS.index(first_stage) if first_stage else 0:]]
     colour = alt.Scale(domain=names, range=["#5B6168", _TEAL])
     dash = alt.Scale(domain=names, range=[[6, 4], [1, 0]])
     shape = alt.Scale(domain=names, range=["square", "circle"])
-    x = alt.X("stage:N", title=None, scale=alt.Scale(domain=list(wording.STAGE_NAME_LIST)),
+    x = alt.X("stage:N", title=None, scale=alt.Scale(domain=stage_domain),
               axis=alt.Axis(labelAngle=-35, labelAlign="right", labelBaseline="middle", labelFont="IBM Plex Sans",
                             labelColor=_INK, labelOverlap=False, labelFontSize=11, labelLimit=0))
     y = alt.Y("nrmsd:Q", title="nRMSD (unitless)", scale=alt.Scale(domain=[0, top], nice=False),
@@ -268,7 +288,7 @@ def attempt_chart(view: AttemptView, tau_label: str, top: float) -> alt.Chart:
     rule = alt.Chart(pd.DataFrame({"tau": [view.tau]})).mark_rule(color=_INK, strokeWidth=2, strokeDash=[5, 3]).encode(y="tau:Q")
     tag = alt.Chart(pd.DataFrame({"tau": [view.tau], "label": [f"τ = {tau_label}"]})).mark_text(
         align="center", dy=-8, font=_MONO, fontSize=11, color=_INK
-    ).encode(y="tau:Q", text="label:N", x=alt.datum(wording.STAGE_NAME_LIST[1]))
+    ).encode(y="tau:Q", text="label:N", x=alt.datum(stage_domain[min(1, len(stage_domain) - 1)]))
     return (
         alt.layer(line, points, rule, tag).properties(height=300)
         .configure(background="#FFFFFF").configure_view(stroke="#E6E1D7")
@@ -276,13 +296,137 @@ def attempt_chart(view: AttemptView, tau_label: str, top: float) -> alt.Chart:
     )
 
 
+# --- The Report: share bars, the year charts, shared colour scale -----------------------------------------------------
+
+
+def share_frame(view: Phase3View) -> pd.DataFrame:
+    """Each stage's share of the final gap: the numbers the share bars draw and the table prints."""
+    return pd.DataFrame(
+        [
+            {
+                "stage": wording.STAGE_NAME[row.stage],
+                "share": row.share if view.share_defined and not row.same_model else 0.0,
+                "text": wording.P4_P3_BAR_SAME if row.same_model else (
+                    fmt_share(row.share) if view.share_defined else wording.P4_P3_SHARE_UNDEFINED
+                ),
+            }
+            for row in view.rows
+        ]
+    )
+
+
+def share_chart(view: Phase3View) -> alt.Chart:
+    """One bar per stage, in pipeline order, from 0 to its share, with the share printed at the end of the bar."""
+    frame = share_frame(view)
+    low = min(0.0, float(frame["share"].min()))
+    high = max(1.0, float(frame["share"].max()))
+    y = alt.Y("stage:N", title=None, scale=alt.Scale(domain=list(wording.STAGE_NAME_LIST)),
+              axis=alt.Axis(labelFont="IBM Plex Sans", labelColor=_INK, labelFontSize=12))
+    x = alt.X("share:Q", title=wording.P4_P3_COL_SHARE, scale=alt.Scale(domain=[low, high + 0.12], nice=False),
+              axis=alt.Axis(grid=True, **_AXIS))
+    bars = alt.Chart(frame).mark_bar(color=_TEAL, size=18).encode(y=y, x=x)
+    labels = alt.Chart(frame).mark_text(align="left", dx=6, font=_MONO, fontSize=12, color=_INK).encode(
+        y=y, x=alt.X("share:Q"), text="text:N"
+    )
+    return (
+        alt.layer(bars, labels).properties(height=34 * len(frame) + 40)
+        .configure(background="#FFFFFF").configure_view(stroke="#E6E1D7")
+        .configure_axis(gridColor="#EEEAE2", domainColor="#C9C3B7", tickColor="#C9C3B7")
+    )
+
+
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def hour_month_chart(matrix: pd.DataFrame, top: float, hour_label: str) -> alt.Chart:
+    """The mean |AC difference| by hour of day (rows) and month (columns). `top` is the one upper end of the
+    colour scale used for every pair's map, so the maps can be compared; the 24 × 12 table prints the numbers."""
+    long = matrix.copy()
+    long.index = [f"{int(h):02d}" for h in long.index]
+    long.columns = [MONTHS[int(m) - 1] for m in long.columns]
+    frame = long.reset_index(names="hour").melt(id_vars="hour", var_name="month", value_name="difference")
+    hours = [f"{h:02d}" for h in range(24)]
+    x = alt.X("month:N", title=None, scale=alt.Scale(domain=list(MONTHS)),
+              axis=alt.Axis(labelAngle=0, labelFont="IBM Plex Sans", labelColor=_INK, labelFontSize=11, orient="top"))
+    y = alt.Y("hour:N", title=hour_label, scale=alt.Scale(domain=hours),
+              axis=alt.Axis(values=["00", "06", "12", "18"], labelFont=_MONO, labelColor="#5B6168", titleColor="#3E444A"))
+    return (
+        alt.Chart(frame).mark_rect(stroke="#FFFFFF", strokeWidth=0.5)
+        .encode(x=x, y=y, color=alt.Color("difference:Q", scale=alt.Scale(domain=[0, top], range=[_PALE, _TEAL]), legend=None))
+        .properties(height=300).configure(background="#FFFFFF").configure_view(stroke=None)
+    )
+
+
+def monthly_energy_chart(frame: pd.DataFrame) -> alt.Chart:
+    """Monthly AC energy for A, B and C, drawn with the look they have on page 3 (line, dash and marker)."""
+    from app.run_logic import _COLOURS, _MARKS
+
+    names = [wording.R_PIPELINE.format(label=label) for label in frame.columns]
+    long = frame.copy()
+    long.index = [MONTHS[int(m) - 1] for m in long.index]
+    long = long.reset_index(names="month").melt(id_vars="month", var_name="pipeline", value_name="energy")
+    long["pipeline"] = long["pipeline"].map(lambda label: wording.R_PIPELINE.format(label=label))
+    colour = alt.Scale(domain=names, range=[_COLOURS[label] for label in frame.columns])
+    dash = alt.Scale(domain=names, range=[_MARKS[label][1] for label in frame.columns])
+    shape = alt.Scale(domain=names, range=[_MARKS[label][0] for label in frame.columns])
+    x = alt.X("month:N", title=None, scale=alt.Scale(domain=list(MONTHS)),
+              axis=alt.Axis(labelAngle=0, labelFont="IBM Plex Sans", labelColor=_INK, labelFontSize=11))
+    y = alt.Y("energy:Q", title="AC energy (kWh)", scale=alt.Scale(zero=False), axis=alt.Axis(grid=True, **_AXIS))
+    legend = alt.Legend(title=None, symbolType="stroke", symbolStrokeWidth=3, labelColor="#3E444A")
+    line = alt.Chart(long).mark_line(strokeWidth=2.5).encode(
+        x=x, y=y, color=alt.Color("pipeline:N", scale=colour, legend=legend),
+        strokeDash=alt.StrokeDash("pipeline:N", scale=dash, legend=None),
+    )
+    points = alt.Chart(long).mark_point(filled=True, size=55, opacity=1).encode(
+        x=x, y=y, color=alt.Color("pipeline:N", scale=colour, legend=None),
+        shape=alt.Shape("pipeline:N", scale=shape, legend=None),
+    )
+    return (
+        (line + points).properties(height=260).configure(background="#FFFFFF").configure_view(stroke="#E6E1D7")
+        .configure_axis(gridColor="#EEEAE2", domainColor="#C9C3B7", tickColor="#C9C3B7")
+    )
+
+
+def confirmed_bars(view: AttemptView, tau_label: str, top: float, after_label: str, first_stage: str) -> alt.Chart:
+    """Before and Confirmed as grouped bars for the stages from the localised stage on (as in the mock-up), the
+    value printed on each bar and τ as a horizontal line. The two series differ by outline and fill, not colour only."""
+    frame = attempt_frame(view, after_label, first_stage)
+    names = [wording.RX_COL_BEFORE, after_label]
+    stage_domain = [wording.STAGE_NAME[k] for k in wording.STAGE_KEYS[wording.STAGE_KEYS.index(first_stage):]]
+    x = alt.X("stage:N", title=None, scale=alt.Scale(domain=stage_domain),
+              axis=alt.Axis(labelAngle=0, labelFont="IBM Plex Sans", labelColor=_INK, labelFontSize=12))
+    y = alt.Y("nrmsd:Q", title="nRMSD (unitless)", scale=alt.Scale(domain=[0, top], nice=False), axis=alt.Axis(grid=True, **_AXIS))
+    offset = alt.XOffset("series:N", scale=alt.Scale(domain=names))
+    bars = alt.Chart(frame).mark_bar(size=34, strokeWidth=2).encode(
+        x=x, xOffset=offset, y=y,
+        color=alt.Color("series:N", scale=alt.Scale(domain=names, range=["#D9D3C7", _TEAL]), legend=alt.Legend(title=None, labelColor="#3E444A")),
+        stroke=alt.Stroke("series:N", scale=alt.Scale(domain=names, range=["#5B6168", _TEAL]), legend=None),
+        strokeDash=alt.StrokeDash("series:N", scale=alt.Scale(domain=names, range=[[5, 3], [1, 0]]), legend=None),
+    )
+    labels = alt.Chart(frame).mark_text(dy=-6, font=_MONO, fontSize=11, color=_INK).encode(x=x, xOffset=offset, y=y, text="text:N")
+    rule = alt.Chart(pd.DataFrame({"tau": [view.tau]})).mark_rule(color=_INK, strokeWidth=2, strokeDash=[5, 3]).encode(y="tau:Q")
+    tag = alt.Chart(pd.DataFrame({"tau": [view.tau], "label": [f"τ = {tau_label}"]})).mark_text(
+        align="right", dx=-4, dy=-6, font=_MONO, fontSize=11, color=_INK
+    ).encode(y="tau:Q", text="label:N", x=alt.datum(stage_domain[-1]))
+    return (
+        alt.layer(bars, labels, rule, tag).properties(height=260).configure(background="#FFFFFF")
+        .configure_view(stroke="#E6E1D7").configure_axis(gridColor="#EEEAE2", domainColor="#C9C3B7", tickColor="#C9C3B7")
+    )
+
+
 __all__ = [
+    "MONTHS",
     "attempt_chart",
     "attempt_frame",
+    "confirmed_bars",
     "heat_frame",
     "heatmap",
+    "hour_month_chart",
+    "monthly_energy_chart",
     "propagation_chart",
     "propagation_frame",
+    "share_chart",
+    "share_frame",
     "stage_bars",
     "stage_bars_frame",
     "waterfall",

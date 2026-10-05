@@ -11,7 +11,16 @@ from html import escape
 
 import streamlit as st
 
-from app import analysis_charts, analysis_logic, components, gating, run_logic, state, wording
+from app import (
+    analysis_charts,
+    analysis_logic,
+    components,
+    gating,
+    run_logic,
+    state,
+    tables,
+    wording,
+)
 from pvdials.analysis import AnalysisError
 
 PAIR_KEY = "w4_pair"
@@ -103,10 +112,6 @@ def _run_phase3(ss) -> None:
 # --- Pieces of the page -----------------------------------------------------------------------------------
 
 
-def _tip(text: str, hint: str) -> str:
-    return f'<span class="pv-tip" title="{escape(hint)}">{escape(text)}</span>'
-
-
 def _buttons(ss, phase1: dict | None) -> None:
     done = phase1 is not None
     columns = st.columns(3)
@@ -163,25 +168,6 @@ def _pair_card(view) -> None:
         )
 
 
-def _heat_table(views) -> str:
-    head = "".join(f"<th>{escape(view.label)}</th>" for view in views)
-    rows = []
-    for index, stage in enumerate(analysis_logic.STAGES):
-        cells = []
-        for view in views:
-            value = view.nrmsd[stage]
-            if value is None:
-                cells.append(f'<td class="pv-na">{escape(wording.P4_NA)}</td>')
-                continue
-            mark = components.over_tau_mark() if stage in view.over else ""
-            cells.append(f'<td class="pv-num pv-nowrap">{mark}<span class="pv-mono">{analysis_logic.fmt_nrmsd(value)}</span></td>')
-        rows.append(f"<tr><td>{escape(wording.P4_HEAT_AXIS[index])}</td>{''.join(cells)}</tr>")
-    return (
-        '<table class="pv-stage-table"><thead><tr>'
-        f'<th>{escape(wording.P4_COL_STAGE)}</th>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
-    )
-
-
 def _heat_card(views, tau: dict) -> None:
     with st.container(key="card_heat"):
         components.card_title(wording.P4_HEAT_TITLE, wording.P4_HEAT_SUB.format(tau=analysis_logic.tau_text(tau)))
@@ -189,7 +175,7 @@ def _heat_card(views, tau: dict) -> None:
         with chart:
             st.altair_chart(analysis_charts.heatmap(views), width="stretch")
         with table:
-            st.html(_heat_table(views))
+            st.html(tables.heat_table_html(views))
 
 
 def _stage_table(rows, tau: dict) -> str:
@@ -208,8 +194,8 @@ def _stage_table(rows, tau: dict) -> str:
     return (
         '<table class="pv-stage-table"><thead><tr>'
         f"<th>{escape(wording.P4_COL_STAGE)}</th>"
-        f'<th class="pv-num">{_tip(wording.P4_COL_NRMSD, wording.HELP_NRMSD)}</th>'
-        f'<th>{_tip(against_header, wording.HELP_TAU)}</th>'
+        f'<th class="pv-num">{tables.tip(wording.P4_COL_NRMSD, wording.HELP_NRMSD)}</th>'
+        f'<th>{tables.tip(against_header, wording.HELP_TAU)}</th>'
         f"<th>{escape(wording.P4_COL_MODELS)}</th></tr></thead><tbody>{''.join(body)}</tbody></table>"
     )
 
@@ -239,23 +225,6 @@ def _stage_card(ss, views, tau: dict) -> None:
         st.html(f'<p class="pv-note-line">{escape(wording.P4_UNITLESS.format(tau=analysis_logic.tau_text(tau)))}</p>')
 
 
-def _phase2_table(view, rows) -> str:
-    pair_heads = "".join(f"<th class='pv-num'>{escape(wording.P4_PAIR.format(a=k[0], b=k[2]))}</th>" for k in view.pair_labels)
-    body = "".join(
-        f"<tr><td>{escape(row['label'])}</td>"
-        + "".join(f"<td class='pv-num pv-mono'>{escape(text)}</td>" for text in (*row["pairs"], row["mean"], row["max"], row["delta"]))
-        + "</tr>"
-        for row in rows
-    )
-    return (
-        '<table class="pv-stage-table"><thead><tr>'
-        f"<th>{escape(wording.P4_P2_STAGE)}</th>{pair_heads}"
-        f"<th class='pv-num'>{escape(wording.P4_P2_COL_MEAN)}</th><th class='pv-num'>{escape(wording.P4_P2_COL_MAX)}</th>"
-        f"<th class='pv-num'>{escape(wording.P4_P2_COL_DELTA)}</th></tr></thead><tbody>{body}</tbody></table>"
-        f'<p class="pv-note-line" style="margin-top:8px">{escape(wording.P4_P2_NOTE)}</p>'
-    )
-
-
 def _phase2_section(ss, phase1: dict) -> None:
     phase2 = ss.get("phase2") if isinstance(ss.get("phase2"), dict) else None
     if phase2 is None:
@@ -272,51 +241,11 @@ def _phase2_section(ss, phase1: dict) -> None:
             analysis_charts.propagation_chart(view, tau["value"], analysis_logic.tau_text(tau)), width="stretch"
         )
         st.html(f'<p class="pv-sr-only">{escape(wording.P4_P2_CHART_ALT)}</p>')
-        st.html(_phase2_table(view, analysis_logic.phase2_rows(view)))
-
-
-def _phase3_table(view, tip_phi: str) -> str:
-    a, b = view.pair
-    unit = analysis_logic.PHI_UNIT
-    head = (
-        f"<th>{escape(wording.P4_COL_STAGE)}</th>"
-        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI.format(a=a, b=b, unit=unit), tip_phi)}</th>"
-        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI.format(a=b, b=a, unit=unit), tip_phi)}</th>"
-        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_PHI_FINAL.format(unit=unit), tip_phi)}</th>"
-        f"<th class='pv-num'>{_tip(wording.P4_P3_COL_SHARE, wording.HELP_SHARE)}</th>"
-    )
-    body = []
-    for row in view.rows:
-        if row.same_model:  # the stored value stays 0.0; the page says why there is nothing to show
-            body.append(
-                f"<tr><td>{escape(row.label)}</td>"
-                f"<td colspan='4' class='pv-same'>{escape(wording.SAME_MODEL)}</td></tr>"
-            )
-            continue
-        share = analysis_logic.fmt_share(row.share) if view.share_defined else wording.P4_P3_SHARE_UNDEFINED
-        body.append(
-            f"<tr><td>{escape(row.label)}</td>"
-            + "".join(
-                f"<td class='pv-num pv-mono'>{escape(text)}</td>"
-                for text in (
-                    analysis_logic.fmt_watts(row.phi_ab), analysis_logic.fmt_watts(row.phi_ba),
-                    analysis_logic.fmt_watts(row.phi_final), share,
-                )
-            )
-            + "</tr>"
-        )
-    return f'<table class="pv-stage-table"><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table>'
+        st.html(tables.phase2_table_html(view, analysis_logic.phase2_rows(view)))
 
 
 def _efficiency_line(view) -> None:
-    a, b = view.pair
-    total, rmsd, agrees = analysis_logic.efficiency(view)
-    unit = analysis_logic.PHI_UNIT
-    text = wording.P4_P3_EFF.format(
-        total=analysis_logic.fmt_watts(total), a=a, b=b, rmsd=analysis_logic.fmt_watts(rmsd), unit=unit
-    )
-    if not agrees:
-        text += " " + wording.P4_P3_EFF_DIFF.format(diff=analysis_logic.fmt_watts(abs(total - rmsd)), unit=unit)
+    text, agrees = tables.efficiency_text(view)
     components.message("ok" if agrees else "warn", text, False)
 
 
@@ -342,7 +271,7 @@ def _phase3_section(ss, phase1: dict) -> None:
         if view.state != "ran":
             components.message("todo", view.message or "", False)
             return
-        st.html(_phase3_table(view, wording.HELP_PHI))
+        st.html(tables.phase3_table_html(view, wording.HELP_PHI))
         if view.one_stage:
             components.message("todo", wording.ONE_STAGE_NOTE, False)
         _efficiency_line(view)

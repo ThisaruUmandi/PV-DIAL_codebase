@@ -19,6 +19,7 @@ dependencies = [
     "psycopg[binary]",
     "python-dotenv",
     "prov",
+    "jinja2",
 ]
 
 [project.optional-dependencies]

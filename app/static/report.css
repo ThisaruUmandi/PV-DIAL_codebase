@@ -1,0 +1,56 @@
+/* The downloadable report: the same tokens as the app, with system font stacks only (no web fonts are loaded,
+   so the file opens with no internet). */
+:root {
+  --pv-sans: system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --pv-serif: Georgia, "Times New Roman", serif;
+  --pv-mono: ui-monospace, Menlo, Consolas, "Courier New", monospace;
+  --pv-page: #F6F4EF; --pv-card: #FFFFFF; --pv-border: #DAD5CB; --pv-border-soft: #E6E1D7; --pv-fill: #F1EEE7;
+  --pv-teal: #1F5F6B; --pv-teal-dark: #15454E; --pv-text: #1F2328; --pv-text-2: #5B6168;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--pv-page); color: var(--pv-text); font-family: var(--pv-sans); font-size: 15px; line-height: 1.5; }
+main { max-width: 1040px; margin: 0 auto; padding: 36px 24px 56px; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-family: var(--pv-serif); font-weight: 600; font-size: 34px; line-height: 1.15; margin: 0; }
+h2 { font-size: 17px; font-weight: 600; margin: 0; }
+h3 { font-size: 14px; font-weight: 600; margin: 18px 0 4px; }
+.rp-eyebrow { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--pv-text-2); margin-bottom: 6px; }
+.rp-card { background: var(--pv-card); border: 1px solid var(--pv-border); border-radius: 12px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; }
+.rp-id { flex-direction: row; justify-content: space-between; align-items: baseline; gap: 16px; padding: 14px 20px; }
+.rp-name { font-size: 17px; font-weight: 600; }
+.rp-saved { color: var(--pv-text-2); font-size: 14px; }
+.rp-title { display: flex; flex-direction: column; gap: 2px; }
+.rp-title span { font-size: 13px; color: var(--pv-text-2); }
+.rp-facts { display: grid; grid-template-columns: 1fr 1fr; column-gap: 40px; row-gap: 8px; }
+.pv-kv { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.pv-kv > span:first-child { font-size: 13px; color: var(--pv-text-2); }
+.rp-lines { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.rp-line { display: grid; grid-template-columns: 200px 1fr 220px; gap: 12px; padding: 8px 12px; border: 1px solid var(--pv-border-soft); border-radius: 8px; }
+.rp-text { margin: 4px 0; font-size: 13.5px; }
+.rp-note, .rp-sub { color: var(--pv-text-2); }
+.rp-state { color: var(--pv-text); font-size: 14px; }
+.rp-disclaimer { background: var(--pv-fill); border: 1px solid var(--pv-border-soft); border-radius: 10px; padding: 12px 16px; font-size: 14px; }
+.rp-table { overflow-x: auto; }
+.rp-chart { margin: 4px 0; }
+.rp-chart-box { width: 100%; min-height: 120px; }
+.pv-mono { font-family: var(--pv-mono); }
+.pv-stage-table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 6px; }
+.pv-stage-table th { text-align: left; font-size: 13px; font-weight: 600; color: var(--pv-text-2); padding: 6px 10px; background: var(--pv-fill); }
+.pv-stage-table td { padding: 4px 10px; border-top: 1px solid var(--pv-border-soft); vertical-align: middle; }
+.pv-stage-table .pv-num, .pv-stage-table td.pv-num, .pv-stage-table th.pv-num { text-align: right; }
+.pv-nowrap { white-space: nowrap; }
+.pv-na { font-size: 12px; color: var(--pv-text-2); text-align: right; }
+.pv-same { text-align: center; color: var(--pv-text-2); font-size: 13px; }
+.pv-sub { display: block; font-size: 11px; font-weight: 400; color: var(--pv-text-2); }
+.pv-tip { border-bottom: 1px dotted var(--pv-text-2); cursor: help; }
+.pv-over { font-size: 11px; font-weight: 700; color: var(--pv-text); border: 2px solid var(--pv-text); border-radius: 4px; padding: 0 4px; margin-right: 8px; white-space: nowrap; display: inline-block; vertical-align: middle; line-height: 1.5; }
+.pv-note-line { margin: 0; font-size: 13px; color: var(--pv-text-2); }
+.pv-strip-grey { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; background: var(--pv-fill); border: 1px solid var(--pv-border-soft); border-radius: 10px; padding: 12px 16px; font-size: 14px; }
+.pv-strip-grey b { font-weight: 500; font-size: 15px; }
+.pv-full th, .pv-full td { font-size: 12px; white-space: nowrap; }
+details { border: 1px solid var(--pv-border-soft); border-radius: 10px; background: #FBFAF7; padding: 10px 14px; }
+summary { font-weight: 600; font-size: 14px; cursor: pointer; }
+details[open] summary { margin-bottom: 8px; }
+.rp-foot { color: var(--pv-text-2); font-size: 13px; margin: 0; }
+@media print { body { background: #FFFFFF; } .rp-card { break-inside: avoid; } }
+.rp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; }
+@media (max-width: 760px) { .rp-cols { grid-template-columns: 1fr; } .rp-facts { grid-template-columns: 1fr; } .rp-line { grid-template-columns: 1fr; } }

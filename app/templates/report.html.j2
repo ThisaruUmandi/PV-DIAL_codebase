@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ title }}</title>
+<style>
+{{ css|safe }}
+</style>
+</head>
+<body>
+{% macro block(b) -%}
+  {%- if b.kind == "facts" -%}
+    <div class="rp-facts">{% for label, value in b.rows %}<div class="pv-kv"><span>{{ label }}</span><span class="pv-mono">{{ value }}</span></div>{% endfor %}</div>
+  {%- elif b.kind == "lines" -%}
+    <div class="rp-lines">{% for head, label, tail in b.entries %}<div class="rp-line"><span class="pv-mono">{{ head }}</span><span>{{ label }}</span><span class="pv-mono">{{ tail }}</span></div>{% endfor %}</div>
+  {%- elif b.kind == "table" -%}
+    <div class="rp-table">{{ b.html|safe }}</div>
+  {%- elif b.kind == "chart" -%}
+    <figure class="rp-chart"><div class="rp-chart-box" data-chart="{{ b.id }}" role="img" aria-label="{{ b.alt }}"></div><script type="application/json" id="spec-{{ b.id }}">{{ b.spec|safe }}</script></figure>
+  {%- elif b.kind == "heading" -%}
+    <h3>{{ b.text }}</h3>
+  {%- elif b.kind == "strip" -%}
+    <div class="pv-strip-grey"><span>{{ b.label }}</span><b class="pv-mono">{{ b.value }}</b></div>
+  {%- elif b.kind == "text" -%}
+    <p class="rp-text rp-{{ b.style }}">{{ b.text }}</p>
+  {%- elif b.kind == "columns" -%}
+    <div class="rp-cols"><div>{% for child in b.left %}{{ block(child) }}{% endfor %}</div><div>{% for child in b.right %}{{ block(child) }}{% endfor %}</div></div>
+  {%- elif b.kind == "details" -%}
+    <details><summary>{{ b.title }}</summary>{% for child in b.blocks %}{{ block(child) }}{% endfor %}</details>
+  {%- endif -%}
+{%- endmacro %}
+<main>
+<header class="rp-head">
+  <div>
+    <div class="rp-eyebrow">{{ eyebrow }}</div>
+    <h1>{{ heading }}</h1>
+  </div>
+</header>
+<section class="rp-card rp-id">
+  <div class="rp-name">{{ name }}</div>
+  <div class="rp-saved">{{ saved }}</div>
+</section>
+<noscript><p class="rp-text rp-state">{{ noscript }}</p></noscript>
+{% for section in sections %}
+<section class="rp-card" id="{{ section.key }}">
+  <div class="rp-title"><h2>{{ section.title }}</h2>{% if section.sub %}<span>{{ section.sub }}</span>{% endif %}</div>
+  {% for b in section.blocks %}{{ block(b) }}{% endfor %}
+</section>
+{% endfor %}
+<section class="rp-card" id="technical">
+  {{ block(technical) }}
+</section>
+<p class="rp-foot">{{ foot }}</p>
+</main>
+<script>
+{{ vega_js|safe }}
+</script>
+<script>
+{{ vega_lite_js|safe }}
+</script>
+<script>
+{{ vega_embed_js|safe }}
+</script>
+<script>
+(function () {
+  var root = document.documentElement;
+  root.setAttribute("data-vega", vega.version);
+  root.setAttribute("data-vega-lite", vegaLite.version);
+  root.setAttribute("data-vega-embed", vegaEmbed.version);
+  var boxes = document.querySelectorAll("[data-chart]");
+  var pending = boxes.length;
+  boxes.forEach(function (box) {
+    var spec = JSON.parse(document.getElementById("spec-" + box.getAttribute("data-chart")).textContent);
+    vegaEmbed(box, spec, { actions: false, renderer: "svg" }).then(function () {
+      box.setAttribute("data-drawn", "yes");
+    }).catch(function () {
+      box.setAttribute("data-drawn", "no");
+    }).then(function () {
+      pending -= 1;
+      if (pending === 0) { root.setAttribute("data-charts-ready", "yes"); }
+    });
+  });
+  if (pending === 0) { root.setAttribute("data-charts-ready", "yes"); }
+})();
+</script>
+</body>
+</html>

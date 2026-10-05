@@ -1,0 +1,9 @@
+{
+  "note": "Vendored for the downloadable report. Versions follow what the installed Altair declares: alt.VEGA_VERSION (major 6), alt.VEGALITE_VERSION (6.4.1, exact) and alt.VEGAEMBED_VERSION (major 7); within a declared major, the newest release at the time of vendoring.",
+  "source": "npm packages vega, vega-lite and vega-embed, build/*.min.js, fetched from cdn.jsdelivr.net/npm",
+  "packages": {
+    "vega": {"version": "6.4.0", "file": "vega.min.js", "licence": "BSD-3-Clause", "licence_file": "LICENSE-vega", "sha256": "8f6a3587cf8d4f42c7e08120e3eb05d067e746d554e39d2dcf52acc0bd5ba28f"},
+    "vega-lite": {"version": "6.4.1", "file": "vega-lite.min.js", "licence": "BSD-3-Clause", "licence_file": "LICENSE-vega-lite", "sha256": "6d5035fdd429b4bc6f91f3754426c3f516f3dbd8e08b105cfc2496bed4ebd254"},
+    "vega-embed": {"version": "7.3.0", "file": "vega-embed.min.js", "licence": "BSD-3-Clause", "licence_file": "LICENSE-vega-embed", "sha256": "b1455caba2fb1a72fb46025ba0ba1316e2dbc7f0dd40a3f6040172bf9c08ba91"}
+  }
+}

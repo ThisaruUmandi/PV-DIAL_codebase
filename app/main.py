@@ -22,6 +22,7 @@ from app.screens import (
     home,
     past,
     reexec_page,
+    report_page,
     run_page,
     step_skeleton,
 )
@@ -39,6 +40,8 @@ def _step_page(step: int):
             analysis_page.render()
         elif step == 5:
             reexec_page.render()
+        elif step == 6:
+            report_page.render()
         else:
             step_skeleton.render(step)
 

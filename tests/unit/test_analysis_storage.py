@@ -20,6 +20,7 @@ from pvdials.data.upload import file_sha256, store_upload
 from pvdials.provenance.analyses import (
     NOT_RECORDED,
     duplicate_analysis,
+    linked_records,
     list_analyses_summary,
     load_analysis,
     load_stage_series,
@@ -267,3 +268,26 @@ def test_reexecuting_an_existing_analysis_in_a_fresh_process_adds_nothing(tmp_pa
     assert _counts() == counts_before
     row = load_analysis(first.analysis_id)
     assert row["created_at"] == created_before and row["status"] == "done"
+
+
+# --- linked provenance records, read-only ------------------------------------------
+
+
+def test_linked_records_returns_every_linked_document_unchanged_in_a_fixed_order_and_writes_nothing(tmp_path):
+    run = run_analysis(_yaml_path(tmp_path))
+    linked = _linked_record_ids(run.analysis_id)
+    counts_before = _counts()
+    records = linked_records(run.analysis_id)
+    assert {r["record_id"] for r in records} == linked and len(records) == len(linked) >= 3  # no more, no fewer
+    assert [r["execution_set"] for r in records] == sorted(
+        (r["execution_set"] for r in records), key=("original", "derived", "reexec").index
+    )  # ORIGINAL, then DERIVED, then REEXEC
+    originals = [r for r in records if r["execution_set"] == "original"]
+    assert [r["config_label"] for r in originals] == ["A", "B", "C"]
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT id, document FROM provenance_records")
+        stored = dict(cur.fetchall())
+    for record in records:
+        assert record["document"] == stored[record["record_id"]]  # the document as stored, unchanged
+        assert set(record) == {"record_id", "execution_set", "config_label", "document"}
+    assert _counts() == counts_before and linked_records("no-such-analysis") == []
