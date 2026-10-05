@@ -171,80 +171,146 @@ def _choose(ss, phase1: dict, pairs: list[tuple[str, str]]) -> None:
     _not_selectable(pool, stage)
 
 
-def _attempts_card(attempts: list[dict], phase1: dict, pair: tuple[str, str]) -> None:
-    rows = []
-    for position, attempt in enumerate(attempts, start=1):
-        after = attempt["phase1"]
-        if after.get("status") == "ran":
-            outcome, k = wording.P4_OUTCOME.format(n=after["outcome"]), (
-                wording.STAGE_NAME[after["k"].lower()] if after["k"] else wording.K_NONE
-            )
-        else:
-            outcome, k = wording.P4_NA, NO_K
-        rows.append(
-            f"<tr><td>{escape(wording.RX_ATTEMPT_LABEL.format(n=position))}</td><td>{escape(attempt['anchor'])}</td>"
-            f"<td class='pv-mono'>{escape(attempt['candidate'])}</td><td>{escape(outcome)}</td><td>{escape(k)}</td></tr>"
-        )
-    head = "".join(f"<th>{escape(name)}</th>" for name in wording.RX_ATTEMPT_COLUMNS)
-    st.html(
-        f'<h2 class="pv-card-title">{escape(wording.RX_ATTEMPTS_TITLE)}</h2>'
-        f'<table class="pv-stage-table"><thead><tr>{head}</tr></thead><tbody>{"".join(rows)}</tbody></table>'
-    )
-
-
 def _cell(value: float | None, over: bool) -> str:
     mark = components.over_tau_mark() if over else ""
     return f'<td class="pv-num pv-nowrap">{mark}<span class="pv-mono">{analysis_logic.fmt_nrmsd(value)}</span></td>'
 
 
-def _result_table(view: reexec_logic.AttemptView) -> str:
-    body = "".join(
-        f"<tr><td>{escape(row.label)}</td>{_cell(row.before, row.before_over)}{_cell(row.after, row.after_over)}"
-        f"<td class='pv-num pv-mono'>{escape(reexec_logic.fmt_change(row.change))}</td></tr>"
-        for row in view.rows
+def _attempts_table(phase1: dict, attempts: list[dict], shown_seq: int) -> str:
+    """One table: stages as rows; columns Before, then one per attempt of this pair in the order made (the one
+    shown is marked current), then the signed change of the shown attempt. Every number comes from attempt_view."""
+    pair_entry = phase1[attempts[0]["pair"]]
+    views = [reexec_logic.attempt_view(pair_entry, a["phase1"]) for a in attempts]
+    shown = next(i for i, a in enumerate(attempts) if a["seq"] == shown_seq)
+    with_change = views[shown].computable
+    head = [f"<th>{escape(wording.P4_COL_STAGE)}</th><th class='pv-num'>{escape(wording.RX_COL_BEFORE)}</th>"]
+    for position, attempt in enumerate(attempts):
+        current = f" · {escape(wording.RX_CURRENT)}" if position == shown else ""
+        head.append(
+            f"<th class='pv-num'>{escape(wording.RX_COL_ATTEMPT.format(n=position + 1))}{current}"
+            f"<span class='pv-sub pv-mono'>{escape(attempt['candidate'])}</span></th>"
+        )
+    if with_change:
+        head.append(f"<th class='pv-num'>{escape(wording.RX_COL_CHANGE)}</th>")
+    body = []
+    reference = next((v for v in views if v.computable), None)
+    for index, stage in enumerate(analysis_logic.STAGES):
+        cells = []
+        for view in views:
+            if view.computable:
+                cells.append(_cell(view.rows[index].after, view.rows[index].after_over))
+            else:
+                cells.append(f"<td class='pv-num'>{escape(NO_K)}</td>")
+        before = reference.rows[index] if reference else None
+        before_cell = _cell(before.before, before.before_over) if before else f"<td class='pv-num'>{escape(NO_K)}</td>"
+        change = (
+            f"<td class='pv-num pv-mono'>{escape(reexec_logic.fmt_change(views[shown].rows[index].change))}</td>"
+            if with_change
+            else ""
+        )
+        body.append(f"<tr><td>{escape(wording.STAGE_NUMBERED[stage])}</td>{before_cell}{''.join(cells)}{change}</tr>")
+    outcomes = "".join(
+        f"<td class='pv-num'>{escape(v.after_outcome if v.computable else wording.P4_NA)}</td>" for v in views
     )
-    outcome = (
-        f"<tr><td>{escape(wording.RX_ROW_OUTCOME)}</td><td class='pv-num' colspan='1'>{escape(view.before_outcome)}</td>"
-        f"<td class='pv-num' colspan='2'>{escape(view.after_outcome or '')}</td></tr>"
+    before_outcome = views[0].before_outcome
+    tail = "<td></td>" if with_change else ""
+    body.append(
+        f"<tr><td>{escape(wording.RX_ROW_OUTCOME)}</td><td class='pv-num'>{escape(before_outcome)}</td>{outcomes}{tail}</tr>"
+    )
+    return f'<table class="pv-stage-table pv-attempts"><thead><tr>{"".join(head)}</tr></thead><tbody>{"".join(body)}</tbody></table>'
+
+
+def _confirmed_table(reexec: dict, phase1: dict) -> str:
+    """Before and one column for the saved confirmed change, from what is stored. A row saved before the
+    comparison was kept shows 'not recorded for this analysis' in that column."""
+    pair_entry = phase1.get(reexec_logic.pair_key(tuple(reexec["pair"])))
+    saved = reexec.get("phase1")
+    candidate = reexec.get("candidate")
+    title = wording.RX_COL_CONFIRMED.format(model=candidate) if candidate else wording.RX_COL_CONFIRMED_PLAIN
+    view = (
+        reexec_logic.attempt_view(pair_entry, saved)
+        if saved and pair_entry and pair_entry.get("status") == "ran"
+        else None
+    )
+    missing = f"<td class='pv-num'>{escape(wording.RX_NOT_RECORDED)}</td>"
+    before_entry = pair_entry if pair_entry and pair_entry.get("status") == "ran" else None
+    before_view = reexec_logic.attempt_view(before_entry, before_entry) if before_entry else None
+    body = []
+    for index, stage in enumerate(analysis_logic.STAGES):
+        before = _cell(before_view.rows[index].before, before_view.rows[index].before_over) if before_view else missing
+        after = (
+            _cell(view.rows[index].after, view.rows[index].after_over)
+            if view is not None and view.computable
+            else missing
+        )
+        body.append(f"<tr><td>{escape(wording.STAGE_NUMBERED[stage])}</td>{before}{after}</tr>")
+    outcome_before = before_view.before_outcome if before_view else wording.RX_NOT_RECORDED
+    outcome_after = view.after_outcome if view is not None and view.computable else wording.RX_NOT_RECORDED
+    body.append(
+        f"<tr><td>{escape(wording.RX_ROW_OUTCOME)}</td><td class='pv-num'>{escape(outcome_before)}</td>"
+        f"<td class='pv-num'>{escape(outcome_after)}</td></tr>"
     )
     return (
-        '<table class="pv-stage-table"><thead><tr>'
+        '<table class="pv-stage-table pv-attempts"><thead><tr>'
         f"<th>{escape(wording.P4_COL_STAGE)}</th><th class='pv-num'>{escape(wording.RX_COL_BEFORE)}</th>"
-        f"<th class='pv-num'>{escape(wording.RX_COL_AFTER)}</th><th class='pv-num'>{escape(wording.RX_COL_CHANGE)}</th>"
-        f"</tr></thead><tbody>{body}{outcome}</tbody></table>"
+        f"<th class='pv-num'>{escape(title)}</th></tr></thead><tbody>{''.join(body)}</tbody></table>"
     )
 
 
-def _result_card(ss, phase1: dict, attempt: dict, position: int, tau: dict, top: float) -> None:
-    pair = tuple(attempt["pair"].split("-"))
-    view = reexec_logic.attempt_view(phase1[attempt["pair"]], attempt["phase1"])
-    other = reexec_logic.other_label(pair, attempt["anchor"])
+def _yield_strip(reexec: dict) -> None:
+    value = reexec.get("annual_yield_kwh")
+    text = f"{run_logic.kwh_text(value)} kWh" if value is not None else wording.RX_YIELD_NONE
+    st.html(
+        '<div class="pv-strip-grey">'
+        f"<span>{escape(wording.RX_YIELD_STRIP.format(change=reexec_logic.change_text(reexec)))}</span>"
+        f'<b class="pv-mono">{escape(text)}</b></div>'
+    )
+
+
+def _results_card(ss, phase1: dict, pair: tuple[str, str] | None, tau: dict, top: float) -> None:
+    """The right-hand card: the attempts of the chosen pair as columns, or the saved confirmed change."""
+    attempts = reexec_logic.attempts_of(ss, pair) if pair is not None else []
+    confirmed = reexec_logic.confirmed_of(ss)
     with st.container(key="card_result"):
-        components.card_title(
-            wording.RX_RESULT_TITLE.format(other=other),
-            wording.RX_RESULT_SUB.format(
-                n=position, candidate=attempt["candidate"], stage=wording.STAGE_NAME[attempt["stage"]],
-                anchor=attempt["anchor"], pair=analysis_logic.pair_label(pair),
-            ),
-        )
-        if not view.computable:
-            components.message("todo", view.message or "", False)
-            return
-        table, chart = st.columns([3, 2])
-        with table:
-            st.html(_result_table(view))
-        with chart:
-            st.altair_chart(analysis_charts.attempt_chart(view, analysis_logic.tau_text(tau), top), width="stretch")
-            st.html(f'<p class="pv-sr-only">{escape(wording.RX_CHART_ALT)}</p>')
-        with st.expander(wording.RX_YIELD_OPEN, expanded=False):
-            st.html(
-                f'<p class="pv-note-line">{escape(wording.RX_YIELD_NOTE)}</p>'
-                '<table class="pv-stage-table"><thead><tr>'
-                f"<th class='pv-num'>{escape(wording.RX_YIELD_ORIGINAL.format(anchor=attempt['anchor']))}</th>"
-                f"<th class='pv-num'>{escape(wording.RX_YIELD_SUBSTITUTED.format(anchor=attempt['anchor'], candidate=attempt['candidate']))}</th>"
-                f"</tr></thead><tbody><tr><td class='pv-num pv-mono'>{run_logic.kwh_text(attempt['anchor_yield_kwh'])} kWh</td>"
-                f"<td class='pv-num pv-mono'>{run_logic.kwh_text(attempt['yield_kwh'])} kWh</td></tr></tbody></table>"
+        if attempts:
+            seqs = [a["seq"] for a in attempts]
+            if ss.get(VIEW_KEY) not in seqs:
+                ss[VIEW_KEY] = seqs[-1]
+            shown = next(a for a in attempts if a["seq"] == ss[VIEW_KEY])
+            other = reexec_logic.other_label(pair, shown["anchor"])
+            components.card_title(wording.RX_RESULT_TITLE.format(other=other), wording.RX_ATTEMPTS_SUB)
+            st.segmented_control(
+                wording.RX_VIEW, seqs, key=VIEW_KEY, selection_mode="single",
+                format_func=lambda seq: wording.RX_ATTEMPT_LABEL.format(n=seqs.index(seq) + 1),
             )
+            st.html(_attempts_table(phase1, attempts, shown["seq"]))
+            view = reexec_logic.attempt_view(phase1[shown["pair"]], shown["phase1"])
+            if not view.computable:
+                components.message("todo", view.message or "", False)
+            else:
+                st.altair_chart(analysis_charts.attempt_chart(view, analysis_logic.tau_text(tau), top), width="stretch")
+                st.html(f'<p class="pv-sr-only">{escape(wording.RX_CHART_ALT)}</p>')
+                with st.expander(wording.RX_YIELD_OPEN, expanded=False):
+                    st.html(
+                        f'<p class="pv-note-line">{escape(wording.RX_YIELD_NOTE)}</p>'
+                        '<table class="pv-stage-table"><thead><tr>'
+                        f"<th class='pv-num'>{escape(wording.RX_YIELD_ORIGINAL.format(anchor=shown['anchor']))}</th>"
+                        f"<th class='pv-num'>{escape(wording.RX_YIELD_SUBSTITUTED.format(anchor=shown['anchor'], candidate=shown['candidate']))}</th>"
+                        f"</tr></thead><tbody><tr><td class='pv-num pv-mono'>{run_logic.kwh_text(shown['anchor_yield_kwh'])} kWh</td>"
+                        f"<td class='pv-num pv-mono'>{run_logic.kwh_text(shown['yield_kwh'])} kWh</td></tr></tbody></table>"
+                    )
+        elif confirmed:
+            anchor = confirmed.get("anchor")
+            title = (
+                wording.RX_RESULT_TITLE.format(other=reexec_logic.other_label(tuple(confirmed["pair"]), anchor))
+                if anchor
+                else wording.RX_RESULT_TITLE_PLAIN
+            )
+            components.card_title(title, reexec_logic.change_text(confirmed))
+            st.html(_confirmed_table(confirmed, phase1))
+        else:
+            components.card_title(wording.RX_RESULT_TITLE_PLAIN)
+            st.html(f'<p class="pv-note-line">{escape(wording.RX_NO_RESULTS)}</p>')
 
 
 def _confirm_area(ss, attempt: dict) -> None:
@@ -270,42 +336,26 @@ def _confirm_area(ss, attempt: dict) -> None:
             st.button(wording.RX_CONFIRM_NO, key="w5_cancel_button", on_click=_cancel)
 
 
-def _confirmed_card(ss, phase1: dict) -> None:
+def _confirmed_facts(ss) -> None:
+    """What is saved with the analysis (anchor, stage, candidate, the models), below the two columns."""
     reexec = reexec_logic.confirmed_of(ss)
     if not reexec:
         return
-    pair = tuple(reexec["pair"])
     models = reexec["substituted_stage_model"]
     stage_key = reexec.get("stage")
     items = [
         (wording.RX_CONFIRMED_ANCHOR, str(reexec_logic.recorded(reexec, "anchor"))),
-        (
-            wording.RX_CONFIRMED_STAGE,
-            wording.STAGE_NAME[stage_key.lower()] if stage_key else wording.RX_NOT_RECORDED,
-        ),
+        (wording.RX_CONFIRMED_STAGE, wording.STAGE_NAME[stage_key.lower()] if stage_key else wording.RX_NOT_RECORDED),
         (wording.RX_CONFIRMED_CANDIDATE, str(reexec_logic.recorded(reexec, "candidate"))),
         (wording.RX_CONFIRMED_MODELS, " · ".join(models[f"{key}_model"] for key in wording.STAGE_KEYS)),
-        (
-            wording.RX_CONFIRMED_YIELD,
-            f"{run_logic.kwh_text(reexec['annual_yield_kwh'])} kWh" if reexec.get("annual_yield_kwh") is not None else wording.RX_YIELD_NONE,
-        ),
     ]
     rows = "".join(
         f'<div class="pv-kv pv-prov-row"><span>{escape(label)}</span><span class="pv-mono pv-prov-value">{escape(value)}</span></div>'
         for label, value in items
     )
     with st.container(key="card_confirmed"):
-        components.card_title(wording.RX_CONFIRMED_TITLE, reexec_logic.change_text(reexec))
+        components.card_title(wording.RX_CONFIRMED_TITLE, wording.RX_CONFIRMED_FACTS_SUB)
         st.html(f'<div class="pv-prov">{rows}</div>')
-        after = reexec.get("phase1")
-        if after and phase1.get(reexec_logic.pair_key(pair), {}).get("status") == "ran":
-            view = reexec_logic.attempt_view(phase1[reexec_logic.pair_key(pair)], after)
-            if view.computable:
-                st.html(_result_table(view))
-            else:
-                components.message("todo", view.message or "", False)
-        else:
-            components.message("todo", f"{wording.RX_COL_AFTER}: {wording.RX_NOT_RECORDED}", False)
 
 
 def _tag_optional() -> None:
@@ -342,30 +392,24 @@ def render() -> None:
 
     pairs = reexec_logic.pairs_with_k(phase1)
     init_widgets(ss, [reexec_logic.pair_key(p) for p in pairs])
-    _choose(ss, phase1, pairs)
-    if ss.get("p5_problem"):
-        components.show_problem(ss["p5_problem"])
-
-    with st.container(key="card_disclaimer"):
-        st.html(f'<p class="pv-disclaimer">{escape(wording.DISCLAIMER)}</p>')
-
-    pair = _pair(ss)
     session_attempts = (ss.get("reexec_session") or {}).get("attempts", [])
-    if pair is not None:
-        attempts = reexec_logic.attempts_of(ss, pair)
+    tau = analysis_logic.tau_of(phase1, ss["inputs"].get("tau"))
+    left, right = st.columns([2, 3])
+    with left:
+        _choose(ss, phase1, pairs)
+        if ss.get("p5_problem"):
+            components.show_problem(ss["p5_problem"])
+    pair = _pair(ss)
+    with right:
+        _results_card(ss, phase1, pair, tau, reexec_logic.axis_max(phase1, session_attempts))
+        with st.container(key="card_disclaimer"):
+            st.html(f'<p class="pv-disclaimer">{escape(wording.DISCLAIMER)}</p>')
+        attempts = reexec_logic.attempts_of(ss, pair) if pair is not None else []
         if attempts:
-            seqs = [a["seq"] for a in attempts]
-            if ss.get(VIEW_KEY) not in seqs:
-                ss[VIEW_KEY] = seqs[-1]
-            tau = analysis_logic.tau_of(phase1, ss["inputs"].get("tau"))
-            with st.container(key="card_attempts"):
-                _attempts_card(attempts, phase1, pair)
-                st.segmented_control(
-                    wording.RX_VIEW, seqs, key=VIEW_KEY, selection_mode="single",
-                    format_func=lambda seq: wording.RX_ATTEMPT_LABEL.format(n=seqs.index(seq) + 1),
-                )
-            shown = next(a for a in attempts if a["seq"] == ss[VIEW_KEY])
-            _result_card(ss, phase1, shown, seqs.index(shown["seq"]) + 1, tau, reexec_logic.axis_max(phase1, session_attempts))
+            shown = next((a for a in attempts if a["seq"] == ss.get(VIEW_KEY)), attempts[-1])
             _confirm_area(ss, shown)
-    _confirmed_card(ss, phase1)
+        confirmed = reexec_logic.confirmed_of(ss)
+        if confirmed:
+            _yield_strip(confirmed)
+    _confirmed_facts(ss)
     ss["w5_prev"] = {key: ss.get(key) for key in (PAIR_KEY, ANCHOR_KEY, CAND_KEY)}

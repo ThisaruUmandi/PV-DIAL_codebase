@@ -64,11 +64,21 @@ def _text(at) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", joined)))
 
 
-def _attempts_table(at) -> str:
-    """The text of the attempts list, nothing else on the page."""
-    found = re.search(r"Attempts in this session</h2>(<table.*?</table>)", _markup(at), re.DOTALL)
-    assert found, "no attempts list on the page"
+def _results_table(at) -> str:
+    """The text of the results table (stages as rows), nothing else on the page."""
+    found = re.search(r'<table class="pv-stage-table pv-attempts">(.*?)</table>', _markup(at), re.DOTALL)
+    assert found, "no results table on the page"
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", found.group(1))))
+
+
+def _table_headers(at) -> list[str]:
+    found = re.search(r'<table class="pv-stage-table pv-attempts">(.*?)</table>', _markup(at), re.DOTALL)
+    assert found, "no results table on the page"
+    return [re.sub(r"\s+", "", html.unescape(re.sub(r"<[^>]+>", "", h))) for h in re.findall(r"<th[^>]*>(.*?)</th>", found.group(1), re.DOTALL)]
+
+
+def _attempts_table(at) -> str:
+    return _results_table(at)
 
 
 def _markup(at) -> str:
@@ -215,7 +225,7 @@ def test_the_result_has_a_chart_beside_the_table_and_the_change_is_a_signed_numb
     ss["phase1"]
     at = _attempt(_open(run, inputs, ss))
     text = _text(at)
-    assert wording.RX_COL_BEFORE in text and wording.RX_COL_AFTER in text and wording.RX_COL_CHANGE in text
+    assert _table_headers(at) == ["Stage", "Before", "Attempt1·currentdisc", "Change"]
     assert "−" in text  # the decomposition nRMSD falls to zero: a true minus sign
     frame = next(f for chart in _chart_frames(at) for f in chart if "series" in f.columns)
     assert set(frame["series"]) == {wording.RX_COL_BEFORE, wording.RX_COL_AFTER} and len(frame) == 10
@@ -312,11 +322,12 @@ def test_an_attempt_that_is_not_computable_shows_its_reason_with_no_k_and_no_cha
     assert not at.exception
     text = _text(at)
     assert "Not computable — too few daylight samples at stage DC power" in text
-    result = text.split("Disagreement with")[1]
-    assert wording.RX_COL_CHANGE not in result and "k = " not in result  # no change column, no k
+    table = _results_table(at)
+    assert wording.RX_COL_CHANGE not in table and "Change" not in _table_headers(at)  # no change column
+    assert table.count("k = ") == 1  # only the Before column carries a k
+    assert "Outcome 3, k = Decomposition not computable" in table  # the attempt's own column: no outcome, no k
     assert not any("series" in f.columns for chart in _chart_frames(at) for f in chart)  # no attempt chart
-    listing = _attempts_table(at)
-    assert wording.P4_NA in listing and rx_dash() in listing and "k =" not in listing
+    assert wording.P4_NA in table and rx_dash() in table
 
 
 def rx_dash() -> str:
@@ -732,3 +743,91 @@ def test_stage_names_on_every_page_come_from_the_one_set():
     assert pills == list(wording.STAGE_NAME_LIST)
     # quantity names stay in the units table, so "AC power" is a quantity here, never a stage
     assert wording.COLUMN_INFO["p_ac"][0] == "AC power" and "AC power" not in allowed
+
+
+# --- The layout of the mock-up: two columns, one table with the attempts as columns -------------------------------------------
+
+
+def test_the_page_has_two_columns_with_the_choices_on_the_left_and_the_results_and_confirm_on_the_right():
+    run, inputs, ss = _ready()
+    at = _attempt(_open(run, inputs, ss))
+    left, right = at.columns[0], at.columns[1]
+    assert [b.key for b in left.button] == ["w5_run_button"] and left.selectbox[0].key == "w5_pair"
+    assert left.radio[0].key == "w5_anchor"
+    assert "w5_confirm_button" in [b.key for b in right.button] and "w5_run_button" not in [b.key for b in right.button]
+    assert DISCLAIMER in html.unescape(" ".join(el.value for el in right.get("html")))
+
+
+def test_the_attempts_are_columns_of_one_table_in_the_order_made_and_the_shown_one_is_marked_current():
+    run, inputs, ss = _ready()
+    at = _attempt(_open(run, inputs, ss), candidate="disc")
+    _attempt(at, candidate="dirint")
+    assert _table_headers(at) == ["Stage", "Before", "Attempt1disc", "Attempt2·currentdirint", "Change"]
+    at.get("button_group")[0].set_value(at.session_state["reexec_session"]["attempts"][0]["seq"]).run()
+    assert _table_headers(at) == ["Stage", "Before", "Attempt1·currentdisc", "Attempt2dirint", "Change"]
+    table = _results_table(at)
+    assert table.index("1 · Decomposition") < table.index("5 · AC conversion") < table.index("Outcome and k")
+    view = rx.attempt_view(ss["phase1"]["A-B"], at.session_state["reexec_session"]["attempts"][0]["phase1"])
+    assert rx.fmt_change(view.rows[0].change) in table  # the change column follows the attempt shown
+
+
+def test_the_grey_yield_strip_appears_with_a_confirmed_change_and_shows_the_saved_yield():
+    run, inputs, ss = _ready()
+    at = _attempt(_open(run, inputs, ss))
+    assert "pv-strip-grey" not in _markup(at)  # nothing confirmed yet
+    at.button(key="w5_confirm_button").click().run()
+    at.checkbox(key="w5_yield").set_value(True).run()
+    at.button(key="w5_save_button").click().run()
+    saved = load_analysis(ANALYSIS)["reexec"]
+    markup = _markup(at)
+    assert "pv-strip-grey" in markup
+    assert "Annual yield · A – B · Decomposition: disc (confirmed)" in _text(at)
+    assert f"{rl.kwh_text(saved['annual_yield_kwh'])} kWh" in _text(at.columns[1])
+
+
+def test_a_reopened_analysis_with_a_confirmed_change_shows_before_and_one_confirmed_column_and_the_saved_yield():
+    run, inputs, ss = _ready()
+    at = _attempt(_open(run, inputs, ss), candidate="disc")
+    attempt = at.session_state["reexec_session"]["attempts"][0]
+    at.button(key="w5_confirm_button").click().run()
+    at.checkbox(key="w5_yield").set_value(True).run()
+    at.button(key="w5_save_button").click().run()
+    saved = load_analysis(ANALYSIS)["reexec"]
+    reopened = _open(rl.reopen(ANALYSIS), inputs, ss)  # a fresh page: no attempts, nothing chosen
+    assert not reopened.exception
+    assert _table_headers(reopened) == ["Stage", "Before", "Confirmeddisc"]  # Before and one confirmed column
+    table = _results_table(reopened)
+    view = rx.attempt_view(ss["phase1"]["A-B"], saved["phase1"])
+    for row in view.rows:
+        assert al.fmt_nrmsd(row.before) in table and al.fmt_nrmsd(row.after) in table  # from the saved result
+    assert wording.RX_COL_CHANGE not in table and "Attempt" not in table
+    assert f"{rl.kwh_text(saved['annual_yield_kwh'])} kWh" in _text(reopened)  # the strip
+    assert saved["phase1"] == attempt["phase1"] and wording.RX_NOT_RECORDED not in table
+    assert "Annual yield · A – B · Decomposition: disc (confirmed)" in _text(reopened)
+
+
+def test_a_row_saved_before_the_new_shape_shows_not_recorded_in_the_confirmed_column():
+    run, inputs, ss = _ready()
+    row = load_analysis(ANALYSIS)
+    old = {
+        "pair": ["A", "B"], "config_label": "A_B_confirmed", "annual_yield_kwh": 9800.0, "disclaimer": DISCLAIMER,
+        "substituted_stage_model": {f"{k}_model": v for k, v in {**inputs["pipelines"]["A"], "decomposition": "disc"}.items()},
+    }
+    save_analysis(ANALYSIS, row["name"], "done", row["inputs"], phase1=row["phase1"], phase2=row["phase2"],
+                  phase3=row["phase3"], reexec=old, pipelines=row["pipelines"], run_info=row["run_info"])
+    at = _open(run, inputs, ss)
+    assert _table_headers(at) == ["Stage", "Before", "Confirmed"]  # the model is not recorded, so none is named
+    table = _results_table(at)
+    assert table.count(wording.RX_NOT_RECORDED) == 6  # five stages and the outcome row, in that column only
+    before = {m["stage"].lower(): m["nrmsd"] for m in ss["phase1"]["A-B"]["metrics"]}
+    assert all(al.fmt_nrmsd(v) in table for v in before.values())  # Before still comes from the run
+    assert "9,800.0 kWh" in _text(at) and "pv-strip-grey" in _markup(at)
+
+
+def test_a_saved_change_without_a_yield_says_not_computed_in_the_strip():
+    run, inputs, ss = _ready()
+    at = _attempt(_open(run, inputs, ss))
+    at.button(key="w5_confirm_button").click().run()
+    at.button(key="w5_save_button").click().run()  # the yield box left unticked
+    strip = re.search(r'<div class="pv-strip-grey">(.*?)</div>', _markup(at), re.DOTALL).group(1)
+    assert wording.RX_YIELD_NONE in re.sub(r"<[^>]+>", " ", strip)

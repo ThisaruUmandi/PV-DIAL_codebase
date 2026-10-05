@@ -589,3 +589,10 @@ div.st-key-card_empty5 { background: var(--pv-card); border: 1px solid var(--pv-
 .pv-fixed-stage b { font-size: 15px; color: var(--pv-text); font-weight: 600; }
 .pv-ask { margin: 0; font-size: 14px; line-height: 1.5; font-weight: 600; }
 .pv-tag-optional { margin-top: 4px; }
+
+/* ---- Step 5 two-column layout (as in the Reexecute mock-up) ------------------------------------------------------ */
+.pv-strip-grey { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; background: var(--pv-fill); border: 1px solid var(--pv-border-soft); border-radius: 10px; padding: 12px 16px; font-size: 14px; }
+.pv-strip-grey b { font-weight: 500; font-size: 15px; }
+.pv-sub { display: block; font-size: 11px; font-weight: 400; color: var(--pv-text-2); margin-top: 2px; }
+.pv-attempts th, .pv-attempts td { font-size: 13px; }
+div.st-key-card_result { gap: 12px; }
