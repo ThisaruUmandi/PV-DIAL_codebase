@@ -28,10 +28,13 @@ def _phases_card() -> str:
         for phase, lead, text in wording.HOME_SHOWS
     )
     rest = wording.HOME_NOT_SHOWN.removeprefix(_NOT_SHOWN_LEAD)
+    notes = "".join(f"<li>{escape(item)}</li>" for item in wording.HOME_GOOD_TO_KNOW)
     return (
         f'<h2 class="pv-card-title">{escape(wording.HOME_CARD_SHOWS)}</h2>'
         f'<div class="pv-phase-grid">{rows}</div>'
         f'<div class="pv-soft"><b>{escape(_NOT_SHOWN_LEAD)}</b>{escape(rest)}</div>'
+        f'<div class="pv-soft" style="margin-top:0.75rem"><b>{escape(wording.HOME_GOOD_TO_KNOW_TITLE)}</b>'
+        f'<ul class="pv-list">{notes}</ul></div>'
     )
 
 

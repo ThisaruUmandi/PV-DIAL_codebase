@@ -126,10 +126,21 @@ HOME_NOT_SHOWN = (
     "Choosing between configurations stays with you."
 )
 HOME_BEFORE_YOU_START = (
-    "An hourly PVGIS TMY file (CSV) with GHI, T2m and WS10m. SP is optional",
+    "An hourly weather file (CSV) with GHI, T2m and WS10m. SP is optional",
+    "Latitude and longitude, if the file does not include them. Elevation is optional",
     "Tilt, azimuth and albedo for the array",
-    "A module and inverter from the CEC database, and the array layout (modules per string, strings per inverter)",
-    "The module mounting height",
+    "The names of your module and inverter. You pick them from the CEC lists that come with pvlib",
+    "The array layout (modules per string, strings per inverter)",
+    "The mounting geometry, the construction and the module height",
+)
+HOME_GOOD_TO_KNOW_TITLE = "Good to know"
+HOME_GOOD_TO_KNOW = (
+    "Module and inverter parameters are loaded from the pvlib databases. You do not type datasheet values",
+    "The module and inverter you pick decide which models can be chosen at some stages. "
+    "Models that cannot be chosen are still shown, with the reason",
+    "You do not enter any loss values. Inverter loss comes from the AC conversion model. "
+    "Reflection and temperature losses come from the DC power and cell temperature models. "
+    "Soiling, shading and wiring losses are not included",
 )
 HOME_SAVED_NOTE = (
     "Each analysis is saved as you go. Steps open one at a time; changing an earlier input "
