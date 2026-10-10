@@ -17,6 +17,7 @@ dependencies = [
     "altair",
     "plotly",
     "psycopg[binary]",
+    "psycopg-pool==3.3.3",
     "python-dotenv",
     "prov",
     "jinja2",

@@ -88,7 +88,7 @@ from pvdials.physics.mounting import resolve_mounting
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.shared_inputs import shared_inputs_for
 from pvdials.physics.site import SiteContext, build_site_context, offset_consistency_report
-from pvdials.provenance.analyses import link_record, save_analysis
+from pvdials.provenance.analyses import link_record, link_records, save_analysis
 from pvdials.provenance.db import is_reachable
 from pvdials.provenance.recorder import record as record_provenance
 from pvdials.types import ExecutionSet, PipelineConfig, Stage
@@ -480,8 +480,7 @@ def step_phase3(
             )
         except Exception as exc:
             raise AnalysisError(f"Step 4 (Phase 3) failed for pair {label_a}-{label_b}: {exc}") from exc
-        for record_id in record_ids:
-            link_record(analysis_id, record_id)
+        link_records(analysis_id, record_ids)
         results[pair] = result
     return results
 
@@ -546,8 +545,7 @@ def step_reexecution(
         final = session.confirm(candidate, compute_yield=True)
     except O4Error as exc:
         raise AnalysisError(f"Step 5 (guided re-execution) failed: {exc}") from exc
-    for record_id in record_ids:
-        link_record(analysis_id, record_id)
+    link_records(analysis_id, record_ids)
     return final
 
 

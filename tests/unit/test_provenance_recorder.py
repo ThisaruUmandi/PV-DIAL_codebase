@@ -163,3 +163,31 @@ def test_weather_input_is_stored_and_recoverable_by_its_own_hash():
 
     assert row is not None
     assert row[0] == expected_payload
+
+
+def test_a_record_that_is_already_stored_sends_no_stage_payload_again(monkeypatch):
+    """Same run recorded twice: the second call finds every hash held, so it uploads no payload and the
+    stored rows and the returned id are exactly the first call's."""
+    shared = _shared()
+    config = PipelineConfig("A", "erbs", "isotropic", "faiman", "singlediode_cec", "sandia")
+    result = run_pipeline(config, shared)
+    first_id = record(config, shared, result)
+
+    def snapshot():
+        with get_connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT content_hash, md5(payload::text) FROM stage_output_values ORDER BY 1")
+            values = cur.fetchall()
+            cur.execute("SELECT id, md5(document::text) FROM provenance_records ORDER BY 1")
+            return values, cur.fetchall()
+
+    before = snapshot()
+    sent = []
+    import psycopg
+
+    original = psycopg.Cursor.executemany
+    monkeypatch.setattr(
+        psycopg.Cursor, "executemany", lambda self, q, params, **k: (sent.append(len(list(params))), original(self, q, params, **k))[1]
+    )
+    assert record(config, shared, result) == first_id
+    assert sent == []  # no payload batch was sent at all
+    assert snapshot() == before

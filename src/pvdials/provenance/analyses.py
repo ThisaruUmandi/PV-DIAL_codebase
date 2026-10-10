@@ -19,7 +19,7 @@ from typing import Any
 import pandas as pd
 from psycopg.types.json import Jsonb
 
-from pvdials.provenance.db import get_connection
+from pvdials.provenance.db import run
 
 # Shown wherever a part of a saved analysis was written before that part existed
 # (e.g. rows saved before tau and run_info were stored): a missing part is
@@ -52,8 +52,8 @@ def save_analysis(
     validation tiers, offset report, start/finish times, pvlib version), so a
     reopened analysis can show them without a live run.
     """
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    def write(conn):
+        conn.execute(
             """
             INSERT INTO analyses (
                 id, name, status, inputs, phase1, phase2, phase3, reexec, pipelines, run_info
@@ -84,7 +84,8 @@ def save_analysis(
                 Jsonb(run_info) if run_info is not None else None,
             ),
         )
-        conn.commit()
+
+    run(write)
 
 
 def link_record(analysis_id: str, record_id: str) -> None:
@@ -93,13 +94,24 @@ def link_record(analysis_id: str, record_id: str) -> None:
     regardless of whether that call inserted a new row or matched an
     existing one via content-hash dedup.
     """
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO analysis_records (analysis_id, record_id) VALUES (%s, %s) "
-            "ON CONFLICT DO NOTHING",
-            (analysis_id, record_id),
-        )
-        conn.commit()
+    link_records(analysis_id, [record_id])
+
+
+def link_records(analysis_id: str, record_ids: list[str]) -> None:
+    """link_record for several records in one round trip (the loops that link every record a Phase 3
+    pair or a re-execution made). Linking the same record twice is harmless."""
+    if not record_ids:
+        return
+
+    def write(conn):
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO analysis_records (analysis_id, record_id) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
+                [(analysis_id, record_id) for record_id in record_ids],
+            )
+
+    run(write)
 
 
 _ANALYSIS_FIELDS = (
@@ -109,12 +121,13 @@ _ANALYSIS_FIELDS = (
 
 
 def load_analysis(analysis_id: str) -> dict[str, Any] | None:
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    def read(conn):
+        return conn.execute(
             f"SELECT {', '.join(_ANALYSIS_FIELDS)} FROM analyses WHERE id = %s",
             (analysis_id,),
-        )
-        row = cur.fetchone()
+        ).fetchone()
+
+    row = run(read)
     if row is None:
         return None
     return dict(zip(_ANALYSIS_FIELDS, row, strict=True))
@@ -122,22 +135,20 @@ def load_analysis(analysis_id: str) -> dict[str, Any] | None:
 
 def list_analyses() -> list[dict[str, Any]]:
     fields = ("id", "name", "created_at", "updated_at", "status")
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(f"SELECT {', '.join(fields)} FROM analyses ORDER BY created_at DESC")
-        rows = cur.fetchall()
+    rows = run(lambda conn: conn.execute(f"SELECT {', '.join(fields)} FROM analyses ORDER BY created_at DESC").fetchall())
     return [dict(zip(fields, row, strict=True)) for row in rows]
 
 
 def records_for_analysis(analysis_id: str) -> list[dict]:
     """Every provenance document this analysis touched (for provenance.json)."""
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    rows = run(
+        lambda conn: conn.execute(
             "SELECT pr.document FROM provenance_records pr "
             "JOIN analysis_records ar ON ar.record_id = pr.id "
             "WHERE ar.analysis_id = %s",
             (analysis_id,),
-        )
-        rows = cur.fetchall()
+        ).fetchall()
+    )
     return [row[0] for row in rows]
 
 
@@ -148,13 +159,13 @@ def linked_records(analysis_id: str) -> list[dict[str, Any]]:
     """Every provenance record linked to this analysis, as stored and read-only: record_id, execution_set,
     config_label and the PROV-JSON document unchanged. Fixed order: ORIGINAL, then DERIVED, then REEXEC;
     within a set by label, then record id. (records_for_analysis gives the documents alone.)"""
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    rows = run(
+        lambda conn: conn.execute(
             "SELECT pr.id, pr.execution_set, pr.config_label, pr.document FROM provenance_records pr "
             "JOIN analysis_records ar ON ar.record_id = pr.id WHERE ar.analysis_id = %s",
             (analysis_id,),
-        )
-        rows = cur.fetchall()
+        ).fetchall()
+    )
     records = [
         {"record_id": rid, "execution_set": es, "config_label": label, "document": document}
         for rid, es, label, document in rows
@@ -217,9 +228,7 @@ def list_analyses_summary(
         + (" WHERE " + " AND ".join(where) if where else "")
         + " ORDER BY " + _ORDERS[order]
     )
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
+    rows = run(lambda conn: conn.execute(sql, params).fetchall())
 
     summaries = []
     for analysis_id, name, created_at, updated_at, row_status, weather_file, phase1 in rows:
@@ -271,9 +280,7 @@ def list_analyses_overview(search: str | None = None, order: str = "newest") -> 
         f"a.inputs->'weather'->>'name', a.phase1, a.phase2, a.phase3, a.inputs, {present} "
         f"FROM analyses a{where} ORDER BY {_ORDERS[order]}"
     )
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(sql, params)
-        rows = cur.fetchall()
+    rows = run(lambda conn: conn.execute(sql, params).fetchall())
 
     overview = []
     for (
@@ -332,25 +339,26 @@ def load_stage_series(
     from pvdials.provenance.model import unwrap_value
     from pvdials.provenance.replay import dataframe_from_payload
 
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    def read(conn):
+        row = conn.execute(
             "SELECT pr.document FROM provenance_records pr "
             "JOIN analysis_records ar ON ar.record_id = pr.id "
             "WHERE ar.analysis_id = %s AND pr.execution_set = %s AND pr.config_label = %s",
             (analysis_id, execution_set, label),
-        )
-        row = cur.fetchone()
+        ).fetchone()
         if row is None:
             return None
         bundle = next(iter(row[0]["bundle"].values()))
-        series: dict[str, pd.DataFrame] = {}
-        for stage in _STAGE_NAMES:
-            content_hash = unwrap_value(bundle["entity"][stage]["content_hash"])
-            cur.execute(
-                "SELECT payload FROM stage_output_values WHERE content_hash = %s", (content_hash,)
-            )
-            payload = cur.fetchone()
-            if payload is None:
-                return None
-            series[stage] = dataframe_from_payload(payload[0])
-    return series
+        hashes = {stage: unwrap_value(bundle["entity"][stage]["content_hash"]) for stage in _STAGE_NAMES}
+        # one query for the five payloads, not one per stage (each is a round trip to the database)
+        payloads = dict(
+            conn.execute(
+                "SELECT content_hash, payload FROM stage_output_values WHERE content_hash = ANY(%s)",
+                (list(set(hashes.values())),),
+            ).fetchall()
+        )
+        if any(content_hash not in payloads for content_hash in hashes.values()):
+            return None
+        return {stage: dataframe_from_payload(payloads[hashes[stage]]) for stage in _STAGE_NAMES}
+
+    return run(read)

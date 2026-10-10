@@ -38,7 +38,7 @@ from pvdials.config import ROOT, load_defaults
 from pvdials.data.column_mapper import TimeOffset, detect_site_metadata
 from pvdials.dla.metrics import Tau
 from pvdials.provenance.analyses import load_analysis, load_stage_series, save_analysis
-from pvdials.provenance.db import get_connection
+from pvdials.provenance.db import run as db_run
 from pvdials.provenance.model import unwrap_value
 
 LABELS = config_logic.LABELS
@@ -623,14 +623,14 @@ def _attrs(entity: dict) -> dict[str, Any]:
 
 def read_documents(analysis_id: str) -> dict[str, dict[str, Any]]:
     """{label: {'id', 'execution_set', 'document'}} for the ORIGINAL records of one analysis."""
-    with get_connection() as conn, conn.cursor() as cur:
-        cur.execute(
+    rows = db_run(
+        lambda conn: conn.execute(
             "SELECT pr.id, pr.execution_set, pr.config_label, pr.document FROM provenance_records pr "
             "JOIN analysis_records ar ON ar.record_id = pr.id WHERE ar.analysis_id = %s "
             "AND pr.execution_set = 'original'",
             (analysis_id,),
-        )
-        rows = cur.fetchall()
+        ).fetchall()
+    )
     found = {label: {"id": rid, "execution_set": es, "document": doc} for rid, es, label, doc in rows}
     return {label: found[label] for label in LABELS if label in found}  # fixed A, B, C order
 
