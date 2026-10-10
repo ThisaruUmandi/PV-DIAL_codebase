@@ -21,6 +21,7 @@ Versions come from `pyproject.toml` where it pins them. Otherwise the version is
 | Configuration | python-dotenv | 1.2.3 (installed) | Reads `.env` |
 | Database | PostgreSQL | 17.11 (installed); version not pinned | The provenance store (JSONB columns) |
 | Database driver | psycopg (binary) | 3.3.6 (installed) | Connects to PostgreSQL |
+| Connection pool | psycopg-pool | 3.3.3 (pinned) | Keeps a small set of connections open and reuses them, so each save or read does not open a new one |
 | Provenance | prov | 3.2.2 (installed) | Builds the provenance documents |
 | Report | Jinja2 | 3.1.6 (installed) | Fills the HTML report template |
 | Testing | pytest | 9.1.1 (installed, `dev` extra) | Test runner |
@@ -135,7 +136,7 @@ Run these from the repository root.
    pip install -e ".[dev]"
    ```
 
-   Only pvlib is pinned (`pvlib==0.15.2`). A new install may get newer versions of the other packages than the stack table shows.
+   Only pvlib and psycopg-pool are pinned (`pvlib==0.15.2`, `psycopg-pool==3.3.3`). A new install may get newer versions of the other packages than the stack table shows.
 
 2. Put one line in a file named `.env` in the repository root:
 
@@ -175,7 +176,7 @@ Run these from the repository root.
    python -m pvdials db init
    ```
 
-The first connection after Neon has been idle may be slow while it wakes; `get_connection()` waits up to 10 seconds and retries once. The test guard refuses any remote host unless `TEST_DATABASE_URL` is set to exactly that URL, so the test suite cannot wipe a Neon database by accident.
+The app keeps a small pool of connections open (psycopg-pool). The first connection after Neon has been idle may be slow while it wakes: a connection waits up to 10 seconds, one that has sat idle is tested before it is used, and a connection that has dropped is replaced and the save or read is tried once more (never after a commit). The test guard refuses any remote host unless `TEST_DATABASE_URL` is set to exactly that URL, so the test suite cannot wipe a Neon database by accident.
 
 ## Running the app
 
@@ -291,6 +292,7 @@ Versions are the ones installed in `.venv`. Licences are read from each package'
 | Altair | 6.3.0 | BSD License (classifier) |
 | Plotly | 7.1.0 | MIT |
 | psycopg, psycopg-binary | 3.3.6 | LGPL-3.0-only |
+| psycopg-pool | 3.3.3 | LGPL-3.0-only |
 | python-dotenv | 1.2.3 | BSD-3-Clause |
 | prov | 3.2.2 | MIT |
 | Jinja2 | 3.1.6 | BSD License (classifier) |

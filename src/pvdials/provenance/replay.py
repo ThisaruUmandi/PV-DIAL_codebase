@@ -60,10 +60,21 @@ class ReplayResult:
         return all(s.hash_matches and s.values_match for s in self.stages)
 
 
-def _dataframe_from_payload(payload: dict) -> pd.DataFrame:
-    """Inverse of hash_dataframe: rebuild a DataFrame from a stored payload."""
-    index = pd.DatetimeIndex([pd.Timestamp(ts) for ts in payload["index"]])
+def timestamp_index(isoformats: list[str]) -> pd.DatetimeIndex:
+    """The index a payload stores, as hash_dataframe's inverse."""
+    index = pd.DatetimeIndex([pd.Timestamp(ts) for ts in isoformats])
     index.name = "timestamp"
+    return index
+
+
+def _dataframe_from_payload(payload: dict, index: pd.DatetimeIndex | None = None) -> pd.DataFrame:
+    """Inverse of hash_dataframe: rebuild a DataFrame from a stored payload.
+
+    index: the payload's own index, already built (readers that hold many payloads of one weather
+    file build it once). Without it the index is built from payload["index"], as always.
+    """
+    if index is None:
+        index = timestamp_index(payload["index"])
     data = {}
     for col, values in payload.items():
         if col == "index":

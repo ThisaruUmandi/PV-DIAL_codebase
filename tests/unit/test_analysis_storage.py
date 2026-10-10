@@ -307,6 +307,64 @@ def test_stage_series_from_provenance_equal_the_live_series(tmp_path):
     assert load_stage_series("no-such-analysis", "A") is None
 
 
+def _statements(monkeypatch):
+    """Every SQL text sent through a connection while the test runs."""
+    import psycopg
+
+    sent: list[str] = []
+    original = psycopg.Connection.execute
+
+    def spy(self, query, *args, **kwargs):
+        sent.append(str(query))
+        return original(self, query, *args, **kwargs)
+
+    monkeypatch.setattr(psycopg.Connection, "execute", spy)
+    return sent
+
+
+def test_a_second_read_of_the_series_sends_no_payload_and_gives_equal_separate_frames(tmp_path, monkeypatch):
+    from pvdials.provenance import analyses
+
+    run = run_analysis(_yaml_path(tmp_path))
+    analyses.clear_series_cache()
+    first = load_stage_series(run.analysis_id, "A")
+    sent = _statements(monkeypatch)
+    second = load_stage_series(run.analysis_id, "A")
+    assert not any("payload" in text and "'index'" in text and "SELECT content_hash, payload" in text for text in sent)
+    assert not any("payload - 'index'" in text for text in sent)  # nothing was read again
+    for stage in first:
+        pd.testing.assert_frame_equal(second[stage], first[stage], check_exact=True)
+    second["ac"].iloc[0, 0] = -1.0  # a caller changing its frame must not change what is held
+    second["ac"].index.name = "changed"
+    third = load_stage_series(run.analysis_id, "A")
+    pd.testing.assert_frame_equal(third["ac"], first["ac"], check_exact=True)
+    assert third["ac"].index.name == "timestamp"
+
+
+def test_a_stored_value_that_goes_missing_is_reported_even_when_its_frame_is_held(tmp_path):
+    from pvdials.provenance import analyses
+
+    run = run_analysis(_yaml_path(tmp_path))
+    assert load_stage_series(run.analysis_id, "A") is not None  # now held in memory
+    with get_connection() as conn:
+        conn.execute("DELETE FROM stage_output_values")
+        conn.commit()
+    assert analyses._frames  # the frames are still held in memory ...
+    for label in ("A", "B", "C"):
+        assert load_stage_series(run.analysis_id, label) is None  # ... but the stored values are gone, and it says so
+
+
+def test_the_held_frames_are_bounded(tmp_path, monkeypatch):
+    from pvdials.provenance import analyses
+
+    run = run_analysis(_yaml_path(tmp_path))
+    analyses.clear_series_cache()
+    monkeypatch.setattr(analyses, "SERIES_CACHE_MAX", 4)
+    for label in ("A", "B", "C"):
+        load_stage_series(run.analysis_id, label)
+    assert len(analyses._frames) == 4
+
+
 # --- idempotency of re-execution -------------------------------------------------
 
 

@@ -22,3 +22,15 @@ def pytest_configure(config) -> None:
     url = resolve_test_database_url()
     guard_not_dev_database(url, "the test suite")
     os.environ["DATABASE_URL"] = url
+
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _fresh_series_cache():
+    """Tests wipe and refill the tables directly; start each one with nothing held in memory."""
+    from pvdials.provenance.analyses import clear_series_cache
+
+    clear_series_cache()
+    yield

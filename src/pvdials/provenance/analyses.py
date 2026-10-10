@@ -13,7 +13,9 @@ dedup or not.
 
 from __future__ import annotations
 
+import threading
 import uuid
+from collections import OrderedDict
 from typing import Any
 
 import pandas as pd
@@ -326,6 +328,38 @@ def duplicate_analysis(analysis_id: str, new_id: str | None = None, name: str | 
 
 _STAGE_NAMES = ("decomposition", "transposition", "temperature", "dc", "ac")
 
+# Stage outputs already read, by content hash. A hash names its content exactly (it is the hash of the
+# payload), so an entry can never be out of date and needs no invalidation; it is only bounded, by count,
+# so a long session does not grow without limit (one entry is one hourly frame, about 0.5 MB).
+SERIES_CACHE_MAX = 100
+_frames: OrderedDict[str, pd.DataFrame] = OrderedDict()
+# The timestamp index of a payload, by the md5 of its stored text. Every payload of one weather file
+# stores the same 8,760 timestamps (over half the bytes of a payload), so it is read and built once.
+_indexes: dict[str, pd.DatetimeIndex] = {}
+_cache_lock = threading.Lock()
+
+
+def clear_series_cache() -> None:
+    with _cache_lock:
+        _frames.clear()
+        _indexes.clear()
+
+
+def _cached_frame(content_hash: str) -> pd.DataFrame | None:
+    with _cache_lock:
+        frame = _frames.get(content_hash)
+        if frame is not None:
+            _frames.move_to_end(content_hash)
+    return None if frame is None else frame.copy()  # a copy: a caller may change what it is given
+
+
+def _remember_frame(content_hash: str, frame: pd.DataFrame) -> None:
+    with _cache_lock:
+        _frames[content_hash] = frame
+        _frames.move_to_end(content_hash)
+        while len(_frames) > SERIES_CACHE_MAX:
+            _frames.popitem(last=False)
+
 
 def load_stage_series(
     analysis_id: str, label: str, execution_set: str = "original"
@@ -333,11 +367,16 @@ def load_stage_series(
     """The hourly stage outputs of one pipeline of a saved analysis, rebuilt
     from provenance: analysis_records -> provenance_records (config_label) ->
     each stage entity's content_hash -> stage_output_values. Nothing is
-    copied into `analyses`. None if the analysis has no such record. Columns
-    come back in name order (JSONB does not keep key order): use them by name.
+    copied into `analyses`. None if the analysis has no such record, or if a
+    stored value is missing. Columns come back in name order (JSONB does not
+    keep key order): use them by name.
+
+    Every call checks that each stage's stored row exists (hashes only, no payload), so a missing
+    value is reported as before. Only what is not already held in memory is then read, and without
+    the timestamp index, which is read once per weather file.
     """
     from pvdials.provenance.model import unwrap_value
-    from pvdials.provenance.replay import dataframe_from_payload
+    from pvdials.provenance.replay import dataframe_from_payload, timestamp_index
 
     def read(conn):
         row = conn.execute(
@@ -350,15 +389,60 @@ def load_stage_series(
             return None
         bundle = next(iter(row[0]["bundle"].values()))
         hashes = {stage: unwrap_value(bundle["entity"][stage]["content_hash"]) for stage in _STAGE_NAMES}
-        # one query for the five payloads, not one per stage (each is a round trip to the database)
-        payloads = dict(
+        wanted = list(set(hashes.values()))
+        # which rows exist, and the md5 of each one's stored index (computed by the database, so
+        # nothing large is sent)
+        held = dict(
             conn.execute(
-                "SELECT content_hash, payload FROM stage_output_values WHERE content_hash = ANY(%s)",
-                (list(set(hashes.values())),),
+                "SELECT content_hash, md5((payload->'index')::text) FROM stage_output_values "
+                "WHERE content_hash = ANY(%s)",
+                (wanted,),
             ).fetchall()
         )
-        if any(content_hash not in payloads for content_hash in hashes.values()):
+        if any(content_hash not in held for content_hash in wanted):
             return None
-        return {stage: dataframe_from_payload(payloads[hashes[stage]]) for stage in _STAGE_NAMES}
+
+        frames: dict[str, pd.DataFrame] = {}
+        for content_hash in wanted:
+            frame = _cached_frame(content_hash)
+            if frame is not None:
+                frames[content_hash] = frame
+        need = [content_hash for content_hash in wanted if content_hash not in frames]
+        # a payload with no stored index (none is written that way) is read whole, as it always was
+        whole = [content_hash for content_hash in need if held[content_hash] is None]
+        lean = [content_hash for content_hash in need if held[content_hash] is not None]
+
+        if lean:
+            for md5 in {held[content_hash] for content_hash in lean}:
+                if md5 not in _indexes:
+                    sample = next(content_hash for content_hash in lean if held[content_hash] == md5)
+                    stored = conn.execute(
+                        "SELECT payload->'index' FROM stage_output_values WHERE content_hash = %s", (sample,)
+                    ).fetchone()[0]
+                    with _cache_lock:
+                        _indexes[md5] = timestamp_index(stored)
+            for content_hash, rest in conn.execute(
+                "SELECT content_hash, payload - 'index' FROM stage_output_values WHERE content_hash = ANY(%s)",
+                (lean,),
+            ).fetchall():
+                frame = dataframe_from_payload(rest, index=_indexes[held[content_hash]].copy())
+                _remember_frame(content_hash, frame)
+                frames[content_hash] = frame.copy()
+        if whole:
+            for content_hash, payload in conn.execute(
+                "SELECT content_hash, payload FROM stage_output_values WHERE content_hash = ANY(%s)", (whole,)
+            ).fetchall():
+                frame = dataframe_from_payload(payload)
+                _remember_frame(content_hash, frame)
+                frames[content_hash] = frame.copy()
+
+        # two stages can share one hash; each gets its own frame, as when every stage was read on its own
+        series: dict[str, pd.DataFrame] = {}
+        used: set[str] = set()
+        for stage in _STAGE_NAMES:
+            content_hash = hashes[stage]
+            series[stage] = frames[content_hash].copy() if content_hash in used else frames[content_hash]
+            used.add(content_hash)
+        return series
 
     return run(read)

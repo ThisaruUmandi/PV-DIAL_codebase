@@ -738,10 +738,12 @@ def test_home_has_the_agreed_texts_exactly(world):
     for bullet in wording.HOME_BEFORE_YOU_START:
         assert bullet in text
     assert wording.HOME_BEFORE_YOU_START == (
-        "An hourly PVGIS TMY file (CSV) with GHI, T2m and WS10m. SP is optional",
+        "An hourly weather file (CSV) with GHI, T2m and WS10m. SP is optional",
+        "Latitude and longitude, if the file does not include them. Elevation is optional",
         "Tilt, azimuth and albedo for the array",
-        "A module and inverter from the CEC database, and the array layout (modules per string, strings per inverter)",
-        "The module mounting height",
+        "The names of your module and inverter. You pick them from the CEC lists that come with pvlib",
+        "The array layout (modules per string, strings per inverter)",
+        "The mounting geometry, the construction and the module height",
     )
     for needle in (wording.RECENT_ANALYSES, wording.SIX_STEPS, wording.STAGES_COMPARED, wording.HOME_CARD_SHOWS,
                    wording.HOME_CARD_BEFORE):
