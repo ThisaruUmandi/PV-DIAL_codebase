@@ -12,16 +12,27 @@ side cheaply.
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 from pvdials.provenance.db import DEFAULT_DATABASE_URL
 
 FORBIDDEN_DATABASE_NAME = "pvdials_dev"
 TEST_DATABASE_URL_DEFAULT = "postgresql://localhost:5432/pvdials_test"
+# hostname is None for a URL with no host (Unix-socket / peer-auth local Postgres)
+LOCAL_HOSTS = {None, "", "localhost", "127.0.0.1", "::1"}
 
 
 def guard_not_dev_database(url: str, context: str) -> None:
-    """Raises if url points at pvdials_dev. Fails loudly; does nothing else
-    (no wipe, no connection attempt)."""
+    """Raises if url points at pvdials_dev, or at a remote host (e.g. Neon)
+    that TEST_DATABASE_URL doesn't explicitly name. Fails loudly; does nothing
+    else (no wipe, no connection attempt)."""
+    host = urlparse(url).hostname
+    if host not in LOCAL_HOSTS and url != os.environ.get("TEST_DATABASE_URL"):
+        raise RuntimeError(
+            f"Refusing to run {context} against remote host {host!r}! "
+            f"This code wipes provenance tables, so a remote database (Neon) is "
+            f"only allowed when TEST_DATABASE_URL is set to exactly that URL."
+        )
     if FORBIDDEN_DATABASE_NAME in url:
         raise RuntimeError(
             f"Refusing to run {context} against {FORBIDDEN_DATABASE_NAME}! "

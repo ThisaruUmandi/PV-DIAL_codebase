@@ -160,6 +160,23 @@ Run these from the repository root.
 - Tests use `pvdials_test` (forced by `tests/conftest.py`; a guard refuses `pvdials_dev`).
 - On a new machine create the test database first: see step 3 of Setup above.
 
+### Using Neon instead of local PostgreSQL
+
+1. In the Neon console create a project and a database, then copy the connection string from **Connect**. Use the pooled host (it contains `-pooler`) and keep `sslmode=require`.
+2. Put it in `.env` (which is git-ignored; `.env.example` shows the format):
+
+   ```
+   DATABASE_URL=postgresql://USER:PASSWORD@ep-xxxx-pooler.REGION.aws.neon.tech/pvdials?sslmode=require
+   ```
+
+3. Create the tables on Neon (safe to run more than once):
+
+   ```
+   python -m pvdials db init
+   ```
+
+The first connection after Neon has been idle may be slow while it wakes; `get_connection()` waits up to 10 seconds and retries once. The test guard refuses any remote host unless `TEST_DATABASE_URL` is set to exactly that URL, so the test suite cannot wipe a Neon database by accident.
+
 ## Running the app
 
 With the virtual environment active, run this from the repository root:

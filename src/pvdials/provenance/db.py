@@ -13,6 +13,7 @@ change only, no query rewrites.
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 import psycopg
@@ -27,6 +28,9 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 # no password. Overridden by DATABASE_URL (.env) for anything else, Neon included.
 DEFAULT_DATABASE_URL = "postgresql://localhost:5432/pvdials_dev"
 
+CONNECT_TIMEOUT_SECONDS = 10
+RETRY_DELAY_SECONDS = 1.0
+
 
 def get_connection(database_url: str | None = None) -> Connection:
     """A psycopg connection to the provenance store."""
@@ -36,7 +40,14 @@ def get_connection(database_url: str | None = None) -> Connection:
     url = url.replace("postgresql+psycopg2://", "postgresql://").replace(
         "postgresql+psycopg://", "postgresql://"
     )
-    return psycopg.connect(url)
+    # Neon scales idle computes to zero, so the first connection after a quiet
+    # spell can time out or be refused while it wakes. One short retry covers it.
+    kwargs = {} if "connect_timeout" in url else {"connect_timeout": CONNECT_TIMEOUT_SECONDS}
+    try:
+        return psycopg.connect(url, **kwargs)
+    except psycopg.OperationalError:
+        time.sleep(RETRY_DELAY_SECONDS)
+        return psycopg.connect(url, **kwargs)
 
 
 def run_schema(conn: Connection) -> None:
