@@ -1,0 +1,21 @@
+# Base colours only; the full look is app/static/style.css (loaded by app/theme.py).
+
+[browser]
+gatherUsageStats = false          # no usage statistics
+
+[server]
+showEmailPrompt = false           # no first-run email prompt on a new machine
+
+[client]
+toolbarMode = "viewer"            # hides the Deploy button and the developer toolbar
+
+[theme]
+base = "light"
+primaryColor = "#1F5F6B"
+backgroundColor = "#F6F4EF"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1F2328"
+
+[theme.sidebar]
+backgroundColor = "#1E2A2E"
+textColor = "#F2EFE8"
