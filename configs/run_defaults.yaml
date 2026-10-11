@@ -1,0 +1,90 @@
+# PV-DIAL run defaults. Every value here is written into provenance.
+# Values marked PROVISIONAL must not be treated as settled.
+# Values marked HELD FIXED are model choices kept constant across all configurations.
+
+versions:
+  pvlib: "0.15.2"        # Must match the installed version
+
+site_demo:               # For demostration only. Not used in production.
+  latitude: 6.026
+  longitude: 80.216
+
+data:
+  canonical_year: 2023   # PROVISIONAL — any non-leap year; rows re-indexed onto it by (month, day, hour)
+
+solar_position:
+  method: "nrel_numpy"   # Computed once, shared by all pipelines
+  delta_t_s: 67.0              # PROVISIONAL parameter. None would compute it from the synthetic canonical year
+  atmos_refract_deg: 0.5667    # PROVISIONAL parameter (pvlib's value, now explicit)
+  standard_pressure_pa: 101325 # Used only when pressure source = fixed_standard
+  sp_surface_tolerance: 0.05   # PROVISIONAL — median SP within ±5 % of alt2pres(elevation)
+
+airmass:
+  model: "kastenyoung1989"     # HELD FIXED — decision entry pending. Uses apparent zenith
+
+extraterrestrial:
+  method: "spencer"            # HELD FIXED — decision entry pending
+  solar_constant_w_m2: 1366.1
+
+dla:
+  tau: 0.093              # 28/09, experiments/tau_calibration/trivial_plateau_amendment_exhaustive.py.
+                          # Amended plateau-selection rule (on top of N33/N34's own): excludes two
+                          # near-trivial regions -- tau where >=99% of pairs are outcome 1 (k=None),
+                          # and tau where >=99% of pairs have k=min(S) (S = the stages where the two
+                          # chains' models differ; near tau=0 this just reports structural divergence,
+                          # not a real diagnosis). N34's old default (0.234) sits inside the near-
+                          # trivial-HIGH region: exhaustively, over all C(2,058,2) = 2,116,653 valid
+                          # pairs, 100.00% are outcome 1 at tau=0.234 (the single largest per-pair
+                          # max-stage nRMSD across the whole population is 0.2255, below 0.234).
+                          # This value is the amended rule's default: smallest candidate width
+                          # (0.01) clearing stable_fraction >= 0.99, plateau [0.088, 0.098], centre
+                          # 0.093, stable_fraction 0.996 -- computed exhaustively, no sampling.
+                          # Matches n=1000 sample runs closely (seed=0: 0.101, seed=1: 0.093).
+  daylight_mask_zenith_max_deg: 85.0            # Decided 23/09. Cut-off on TRUE zenith
+  daylight_mask_sweep_deg: [90, 87, 85, 80, 75] # Pre-registered robustness check (experiments/)
+
+stage1:                        # PROVISIONAL — pvlib 0.15.2 values, now explicit
+  erbs:            {min_cos_zenith: 0.065, max_zenith: 87}
+  erbs_driesse:    {min_cos_zenith: 0.065, max_zenith: 87}
+  disc:            {min_cos_zenith: 0.065, max_zenith: 87, max_airmass: 12}
+  dirint:          {min_cos_zenith: 0.065, max_zenith: 87, use_delta_kt_prime: true,
+                    temp_dew: null}   # temp_dew HELD FIXED (23/09): file-independent
+  boland:          {a_coeff: 8.645, b_coeff: 0.613, min_cos_zenith: 0.065, max_zenith: 87}
+  louche:          {max_zenith: 90}
+  orgill_hollands: {min_cos_zenith: 0.065, max_zenith: 87}
+  dhi_clip_min_w_m2: 0.0       # Decided 23/09: clip + log, every Stage 1 DHI
+
+stage2:
+  albedo_default: 0.2          # PROVISIONAL — pre-filled; user may override (23/09)
+  model_perez: "allsitescomposite1990"   # HELD FIXED (23/09) — pvlib's own default, now explicit
+
+stage3:
+  pvsyst_cell:
+    u_c: 29.0             # PROVISIONAL — pvlib "freestanding" default; overridden per mounting
+    u_v: 0.0              # geometry by physics/mounting.py at run time
+    module_efficiency: 0.1    # HELD FIXED — pvlib default. Kept fixed (not module-derived) so
+    alpha_absorption: 0.9     # pvsyst_cell stays available for every module, unconditional
+  faiman:       {u0: 25.0, u1: 6.84}           # PROVISIONAL — pvlib defaults, now explicit
+  fuentes:
+    wind_height_m: 10.0    # PVGIS WS10m measurement height — stated, not pvlib's own default (9.144)
+    emissivity: 0.84       # HELD FIXED — pvlib default, physical constant
+    absorption: 0.83       # HELD FIXED — pvlib default, physical constant
+  noct_sam:
+    transmittance_absorptance: 0.9   # HELD FIXED — pvlib default, physical constant
+    mount_standoff_in: 4             # HELD FIXED — pvlib default ("use if ground-mounted")
+  mounting:
+    geometry_default: "open_rack"        # PROVISIONAL pre-fill (23/09)
+    construction_default: "glass_polymer"  # PROVISIONAL pre-fill (23/09)
+    array_height_default: 1              # PROVISIONAL pre-fill (noct_sam only)
+
+stage4:
+  iam_physical: {n: 1.526, K: 4.0, L: 0.002}      # PROVISIONAL — pvlib defaults, now explicit
+  singlediode:
+    method: "lambertw"                             # HELD FIXED — pvlib default
+    calcparams: {EgRef: 1.121, dEgdT: -0.0002677, irrad_ref: 1000, temp_ref: 25}   # HELD FIXED
+  pvwatts_dc: {temp_ref: 25.0, k: null, cap_adjustment: false}   # HELD FIXED (k has no source)
+  sapm: {temperature_ref: 25, irradiance_ref: 1000}   # HELD FIXED — pvlib defaults
+
+stage5:
+  pvwatts: {eta_inv_nom: 0.96, eta_inv_ref: 0.9637}   # HELD FIXED — pvlib defaults
+  adr: {vtol: 0.1}                                     # HELD FIXED — pvlib default
