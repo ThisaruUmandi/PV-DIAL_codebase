@@ -57,7 +57,7 @@ def _clean() -> None:
     with get_connection() as conn:
         run_schema(conn)
         with conn.cursor() as cur:
-            for table in ("analysis_records", "analyses", "stage_output_values", "provenance_records"):
+            for table in ("analysis_records", "analyses", "stage_output_values", "provenance_records", "uploaded_files"):
                 cur.execute(f"DELETE FROM {table}")
         conn.commit()
 
@@ -72,6 +72,14 @@ def _count(table: str) -> int:
 def clean_db():
     _clean()
     yield
+
+
+@pytest.fixture
+def no_stored_upload(tmp_path, monkeypatch):
+    """Nothing in data/uploads and nothing in uploaded_files: a weather file that is gone everywhere."""
+    from pvdials.data import upload
+
+    monkeypatch.setattr(upload, "UPLOADS_DIR", tmp_path / "empty_uploads")
 
 
 @pytest.fixture(scope="module")
@@ -180,7 +188,7 @@ def test_running_again_keeps_results_a_later_step_already_saved(clean_db):
     assert again["run_info"]["checks"] == row["run_info"]["checks"]
 
 
-def test_a_missing_weather_file_is_reported_in_plain_words_and_nothing_is_saved(clean_db):
+def test_a_missing_weather_file_is_reported_in_plain_words_and_nothing_is_saved(clean_db, no_stored_upload):
     inputs = {**_inputs(), "weather_file": "data/uploads/not_there.csv"}
     with pytest.raises(AnalysisError, match="no longer there"):
         rl.run_pipelines(inputs, "p3-missing")
@@ -446,7 +454,7 @@ def test_cancelling_the_change_keeps_the_results(clean_db):
     assert at.session_state["run_done"] is True and wording.R_BANNER_PASSED.format(n=3) in _text(at)
 
 
-def test_a_missing_weather_file_gives_one_plain_message_and_leaves_step_4_locked(clean_db):
+def test_a_missing_weather_file_gives_one_plain_message_and_leaves_step_4_locked(clean_db, no_stored_upload):
     at = _open(inputs={**_inputs(), "weather_file": "data/uploads/not_there.csv"})
     at.button(key="w3_run").click().run()
     assert not at.exception

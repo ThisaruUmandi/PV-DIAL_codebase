@@ -400,7 +400,18 @@ def test_continue_at_step_1_shows_the_stored_file_and_does_not_replace_the_form_
 # --- a weather file that is no longer stored ----------------------------------------------------------------------------------
 
 
-def test_a_missing_upload_file_says_which_file_to_upload_again_and_the_right_file_resumes(world, tmp_path):
+def _forget_stored_uploads(monkeypatch, tmp_path) -> None:
+    """An upload is also kept in the database and in data/uploads; these tests are about a file that is
+    gone everywhere, so both are emptied."""
+    from pvdials.data import upload
+
+    monkeypatch.setattr(upload, "UPLOADS_DIR", tmp_path / "empty_uploads")
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM uploaded_files")
+        conn.commit()
+
+
+def test_a_missing_upload_file_says_which_file_to_upload_again_and_the_right_file_resumes(world, tmp_path, monkeypatch):
     stored = tmp_path / "gone.csv"
     stored.write_bytes(THESIS_FILE.read_bytes())
     row = load_analysis(world["s2"])
@@ -410,6 +421,7 @@ def test_a_missing_upload_file_says_which_file_to_upload_again_and_the_right_fil
     new_id = _hex()
     save_analysis(new_id, "Hotel missing file", "site_done", inputs)
     stored.unlink()
+    _forget_stored_uploads(monkeypatch, tmp_path)
 
     at = _at()
     rows = past_logic.past_rows()
@@ -434,12 +446,13 @@ def test_a_missing_upload_file_says_which_file_to_upload_again_and_the_right_fil
     assert resumed["weather"]["name"] == THESIS_FILE.name and "awaiting_file" not in resumed
 
 
-def test_the_file_uploaded_again_lets_the_analysis_carry_on_from_where_it_stopped_even_from_a_new_path(world, tmp_path):
+def test_the_file_uploaded_again_lets_the_analysis_carry_on_from_where_it_stopped_even_from_a_new_path(world, tmp_path, monkeypatch):
     row = load_analysis(world["s2"])
     inputs = copy.deepcopy(row["inputs"])
     inputs["weather_file"] = str(tmp_path / "moved_away.csv")  # where it was saved is gone for good
     new_id = _hex()
     save_analysis(new_id, "Golf file moved", "site_done", inputs)
+    _forget_stored_uploads(monkeypatch, tmp_path)
     at = _at()
     rows = past_logic.past_rows()
     at.button(key=f"past_continue_{_position(rows, new_id)}").click().run()

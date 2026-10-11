@@ -68,3 +68,14 @@ CREATE TABLE IF NOT EXISTS analysis_records (
     record_id   TEXT NOT NULL REFERENCES provenance_records(id) ON DELETE CASCADE,
     PRIMARY KEY (analysis_id, record_id)
 );
+
+-- The uploaded weather CSVs themselves, keyed by the SHA-256 of their bytes
+-- (the same name data/uploads/<sha256>.csv uses on disk). The database is the
+-- source of truth; the folder on disk is only a cache that can be rebuilt from
+-- here, so a saved analysis can still be continued, duplicated or re-run on a
+-- host whose disk is wiped on restart.
+CREATE TABLE IF NOT EXISTS uploaded_files (
+    sha256     TEXT PRIMARY KEY,
+    content    BYTEA NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

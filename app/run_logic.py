@@ -9,6 +9,7 @@ stage_output_values, the same place a reopened analysis will read them from.
 from __future__ import annotations
 
 import io
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -36,11 +37,13 @@ from pvdials.analysis import (
 )
 from pvdials.config import ROOT, load_defaults
 from pvdials.data.column_mapper import TimeOffset, detect_site_metadata
+from pvdials.data.upload import ensure_local
 from pvdials.dla.metrics import Tau
 from pvdials.provenance.analyses import load_analysis, load_stage_series, save_analysis
 from pvdials.provenance.db import run as db_run
 from pvdials.provenance.model import unwrap_value
 
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 LABELS = config_logic.LABELS
 STAGES = config_logic.STAGES
 CHECK_ORDER = ("decomposition", "transposition", "temperature", "dc", "ac_not_exceeding_dc", "all_finite")
@@ -57,8 +60,17 @@ _LATER_SECTIONS = ("phase1", "phase2", "phase3", "reexec")
 
 
 def weather_path(inputs: dict) -> str:
+    """Where the analysis reads its weather file from. If the saved path is gone (a host whose disk was
+    wiped, or another machine), the file is rebuilt from the database copy, named by its SHA-256."""
     path = Path(inputs["weather_file"])
-    return str(path if path.is_absolute() else ROOT / path)
+    path = path if path.is_absolute() else ROOT / path
+    if not path.exists():
+        weather = inputs.get("weather") if isinstance(inputs.get("weather"), dict) else {}
+        sha = weather.get("sha256") or path.stem  # uploads are stored as <sha256>.csv
+        restored = ensure_local(sha) if _SHA256.fullmatch(sha) else None
+        if restored is not None:
+            return str(restored)
+    return str(path)
 
 
 def config_from_inputs(inputs: dict) -> AnalysisConfig:

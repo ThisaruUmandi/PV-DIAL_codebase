@@ -18,6 +18,7 @@ from pvdials.analysis import (
     run_analysis,
     write_outputs,
 )
+from pvdials.data.upload import backfill_uploads
 from pvdials.dla.phase1 import OUTCOME_COMPENSATING_DIFFERENCES, OUTCOME_DISAGREEMENT_FOUND
 from pvdials.provenance.analyses import list_analyses
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
@@ -183,6 +184,17 @@ def cmd_db_init(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_db_backfill_uploads(_args: argparse.Namespace) -> int:
+    if not is_reachable():
+        print("FAILED: Postgres is unreachable (DATABASE_URL not set or the service isn't running).", file=sys.stderr)
+        return 1
+    with get_connection() as conn:
+        run_schema(conn)
+    copied, skipped = backfill_uploads()
+    print(f"Copied {copied} upload(s) into the database; skipped {skipped} whose name is not their SHA-256.")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m pvdials")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -199,6 +211,10 @@ def main() -> int:
     db_sub = db_parser.add_subparsers(dest="db_command", required=True)
     db_init_parser = db_sub.add_parser("init", help="create/update the schema")
     db_init_parser.set_defaults(func=cmd_db_init)
+    db_backfill_parser = db_sub.add_parser(
+        "backfill-uploads", help="copy data/uploads/*.csv into the uploaded_files table"
+    )
+    db_backfill_parser.set_defaults(func=cmd_db_backfill_uploads)
 
     args = parser.parse_args()
     return args.func(args)
