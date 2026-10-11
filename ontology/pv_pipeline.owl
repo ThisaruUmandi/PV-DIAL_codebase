@@ -35,7 +35,6 @@
 </owl:DatatypeProperty>
 
 <owl:DatatypeProperty rdf:about="#pvlibFunction">
-  <rdf:type rdf:resource="http://www.w3.org/2002/07/owl#FunctionalProperty"/>
   <rdfs:domain rdf:resource="#Model"/>
   <rdfs:range rdf:resource="http://www.w3.org/2001/XMLSchema#string"/>
 </owl:DatatypeProperty>
@@ -58,110 +57,219 @@
 
 <owl:NamedIndividual rdf:about="#PVSimulationPipeline">
   <rdf:type rdf:resource="#Pipeline"/>
-  <hasStage rdf:resource="#IrradianceDecomposition"/>
-  <hasStage rdf:resource="#POATransposition"/>
+  <hasStage rdf:resource="#Decomposition"/>
+  <hasStage rdf:resource="#Transposition"/>
   <hasStage rdf:resource="#CellTemperature"/>
   <hasStage rdf:resource="#DCPower"/>
   <hasStage rdf:resource="#ACConversion"/>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#IrradianceDecomposition">
+<owl:NamedIndividual rdf:about="#Decomposition">
   <rdf:type rdf:resource="#Stage"/>
-  <hasCandidateModel rdf:resource="#Erbs"/>
-  <hasCandidateModel rdf:resource="#DISC"/>
-  <hasCandidateModel rdf:resource="#DIRINT"/>
-  <precedes rdf:resource="#POATransposition"/>
+  <hasCandidateModel rdf:resource="#erbs"/>
+  <hasCandidateModel rdf:resource="#erbs_driesse"/>
+  <hasCandidateModel rdf:resource="#disc"/>
+  <hasCandidateModel rdf:resource="#dirint"/>
+  <hasCandidateModel rdf:resource="#boland"/>
+  <hasCandidateModel rdf:resource="#louche"/>
+  <hasCandidateModel rdf:resource="#orgill_hollands"/>
+  <precedes rdf:resource="#Transposition"/>
+  <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Decomposition</rdfs:label>
   <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">1</stageOrder>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#Erbs">
+<owl:NamedIndividual rdf:about="#erbs">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.erbs</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#DISC">
+<owl:NamedIndividual rdf:about="#erbs_driesse">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.erbs_driesse</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#disc">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.disc</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#DIRINT">
+<owl:NamedIndividual rdf:about="#dirint">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.dirint</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#POATransposition">
-  <rdf:type rdf:resource="#Stage"/>
-  <hasCandidateModel rdf:resource="#Isotropic"/>
-  <hasCandidateModel rdf:resource="#HayDavies"/>
-  <hasCandidateModel rdf:resource="#Perez"/>
-  <precedes rdf:resource="#CellTemperature"/>
-  <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">2</stageOrder>
+<owl:NamedIndividual rdf:about="#boland">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.boland</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#Isotropic">
+<owl:NamedIndividual rdf:about="#louche">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.louche</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#orgill_hollands">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.orgill_hollands</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#Transposition">
+  <rdf:type rdf:resource="#Stage"/>
+  <hasCandidateModel rdf:resource="#isotropic"/>
+  <hasCandidateModel rdf:resource="#klucher"/>
+  <hasCandidateModel rdf:resource="#haydavies"/>
+  <hasCandidateModel rdf:resource="#reindl"/>
+  <hasCandidateModel rdf:resource="#king"/>
+  <hasCandidateModel rdf:resource="#perez"/>
+  <hasCandidateModel rdf:resource="#perez-driesse"/>
+  <precedes rdf:resource="#CellTemperature"/>
+  <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Transposition</rdfs:label>
+  <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">2</stageOrder>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">The adapter calls pvlib.irradiance.get_total_irradiance(model=...), which runs the listed function for the chosen model.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#isotropic">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.isotropic</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#HayDavies">
+<owl:NamedIndividual rdf:about="#klucher">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.klucher</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#haydavies">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.haydavies</pvlibFunction>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#Perez">
+<owl:NamedIndividual rdf:about="#reindl">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.reindl</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#king">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.king</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#perez">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.perez</pvlibFunction>
 </owl:NamedIndividual>
 
+<owl:NamedIndividual rdf:about="#perez-driesse">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.irradiance.perez_driesse</pvlibFunction>
+</owl:NamedIndividual>
+
 <owl:NamedIndividual rdf:about="#CellTemperature">
   <rdf:type rdf:resource="#Stage"/>
-  <hasCandidateModel rdf:resource="#SAPMCell"/>
-  <hasCandidateModel rdf:resource="#Faiman"/>
+  <hasCandidateModel rdf:resource="#faiman"/>
+  <hasCandidateModel rdf:resource="#pvsyst_cell"/>
+  <hasCandidateModel rdf:resource="#sapm_cell"/>
+  <hasCandidateModel rdf:resource="#fuentes"/>
+  <hasCandidateModel rdf:resource="#noct_sam"/>
+  <hasCandidateModel rdf:resource="#ross"/>
   <precedes rdf:resource="#DCPower"/>
+  <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Cell temperature</rdfs:label>
   <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">3</stageOrder>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#SAPMCell">
-  <rdf:type rdf:resource="#Model"/>
-  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.sapm_cell</pvlibFunction>
-</owl:NamedIndividual>
-
-<owl:NamedIndividual rdf:about="#Faiman">
+<owl:NamedIndividual rdf:about="#faiman">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.faiman</pvlibFunction>
 </owl:NamedIndividual>
 
+<owl:NamedIndividual rdf:about="#pvsyst_cell">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.pvsyst_cell</pvlibFunction>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#sapm_cell">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.sapm_cell</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only where the mounting combination has SAPM coefficients.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#fuentes">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.fuentes</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only when the module has a NOCT value (CEC module library). Also needs the module height entered by the user.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#noct_sam">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.noct_sam</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only when the module has a NOCT value (CEC module library).</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#ross">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.temperature.ross</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only when the module has a NOCT value (CEC module library).</rdfs:comment>
+</owl:NamedIndividual>
+
 <owl:NamedIndividual rdf:about="#DCPower">
   <rdf:type rdf:resource="#Stage"/>
-  <hasCandidateModel rdf:resource="#SingleDiode"/>
-  <hasCandidateModel rdf:resource="#PVWattsDC"/>
+  <hasCandidateModel rdf:resource="#pvwatts_dc"/>
+  <hasCandidateModel rdf:resource="#sapm"/>
+  <hasCandidateModel rdf:resource="#singlediode_desoto"/>
+  <hasCandidateModel rdf:resource="#singlediode_cec"/>
   <precedes rdf:resource="#ACConversion"/>
+  <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">DC power</rdfs:label>
   <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">4</stageOrder>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#SingleDiode">
-  <rdf:type rdf:resource="#Model"/>
-  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.singlediode</pvlibFunction>
-</owl:NamedIndividual>
-
-<owl:NamedIndividual rdf:about="#PVWattsDC">
+<owl:NamedIndividual rdf:about="#pvwatts_dc">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.pvwatts_dc</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Produces no DC voltage, so it cannot be paired with the sandia or adr inverter models.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#sapm">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.sapm_effective_irradiance</pvlibFunction>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.sapm</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only for modules in the Sandia module library.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#singlediode_desoto">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.calcparams_desoto</pvlibFunction>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.singlediode</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only for modules in the CEC module library.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#singlediode_cec">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.singlediode</pvlibFunction>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.pvsystem.calcparams_cec</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Selectable only for modules in the CEC module library.</rdfs:comment>
 </owl:NamedIndividual>
 
 <owl:NamedIndividual rdf:about="#ACConversion">
   <rdf:type rdf:resource="#Stage"/>
-  <hasCandidateModel rdf:resource="#SandiaInverter"/>
-  <hasCandidateModel rdf:resource="#PVWattsInverter"/>
+  <hasCandidateModel rdf:resource="#sandia"/>
+  <hasCandidateModel rdf:resource="#adr"/>
+  <hasCandidateModel rdf:resource="#pvwatts"/>
+  <rdfs:label rdf:datatype="http://www.w3.org/2001/XMLSchema#string">AC conversion</rdfs:label>
   <stageOrder rdf:datatype="http://www.w3.org/2001/XMLSchema#integer">5</stageOrder>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#SandiaInverter">
+<owl:NamedIndividual rdf:about="#sandia">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.inverter.sandia</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Needs DC voltage from the DC power stage and an inverter in the CEC inverter library.</rdfs:comment>
 </owl:NamedIndividual>
 
-<owl:NamedIndividual rdf:about="#PVWattsInverter">
+<owl:NamedIndividual rdf:about="#adr">
+  <rdf:type rdf:resource="#Model"/>
+  <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.inverter.adr</pvlibFunction>
+  <rdfs:comment rdf:datatype="http://www.w3.org/2001/XMLSchema#string">Needs DC voltage from the DC power stage and an inverter in the ADR inverter library.</rdfs:comment>
+</owl:NamedIndividual>
+
+<owl:NamedIndividual rdf:about="#pvwatts">
   <rdf:type rdf:resource="#Model"/>
   <pvlibFunction rdf:datatype="http://www.w3.org/2001/XMLSchema#string">pvlib.inverter.pvwatts</pvlibFunction>
 </owl:NamedIndividual>
