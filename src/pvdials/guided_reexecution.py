@@ -28,6 +28,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from pvdials.config import load_defaults
+from pvdials.dla.metrics import Tau
 from pvdials.dla.phase1 import PairPhase1Result, run_phase1
 from pvdials.physics.pipeline import PipelineResult, SharedInputs, run_pipeline
 from pvdials.physics.registry import (
@@ -197,6 +198,7 @@ class O4Session:
     daylight: pd.Series
     defaults: dict | None = None
     on_record: Callable[[str], None] | None = None
+    tau: Tau | None = None  # the run's override, if any; else run_phase1 resolves the default
 
     def alternatives(self) -> tuple[CandidateModel, ...]:
         return alternatives_at_stage(
@@ -242,7 +244,7 @@ class O4Session:
         defaults = self.defaults or load_defaults()
         config, result = self._run_substitution(candidate_model, "reexec", defaults)
         phase1 = run_phase1(
-            config, result, self.other_config, self.other_result, self.daylight, defaults=defaults
+            config, result, self.other_config, self.other_result, self.daylight, defaults=defaults, tau=self.tau
         )
         return ProposalResult(
             pair=self.pair, candidate_model=candidate_model, config=config, result=result, phase1=phase1

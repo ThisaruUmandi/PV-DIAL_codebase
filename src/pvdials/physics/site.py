@@ -124,6 +124,7 @@ def build_site_context(
     defaults: dict | None = None,
     tau: float | None = None,
     tau_source: str | None = None,
+    tau_reference: str | None = None,
 ) -> SiteContext:
     """Compute solar position once, plus airmass, extraterrestrial DNI and the daylight mask.
 
@@ -139,7 +140,9 @@ def build_site_context(
     function's own reading of defaults["dla"]["tau"]/"default" only when the
     caller passes neither -- the same fallback resolve_tau() itself would
     produce for an unset user value, kept in sync by inspection, not by a
-    shared call.
+    shared call. tau_reference: an override's Tau.reference; recorded as its
+    own setting only when given, so a run without one records exactly the
+    settings it always did.
     """
     defaults = defaults or load_defaults()
     sp_cfg = defaults["solar_position"]
@@ -246,6 +249,7 @@ def build_site_context(
         "time_offset_source": offset.source,
         "tau_value": tau_value,
         "tau_source": tau_source_value,
+        **({"tau_reference": tau_reference} if tau_reference is not None else {}),
         "radiation_database": radiation_database,
         "airmass_model": am_cfg["model"],
         "airmass_zenith": "apparent",

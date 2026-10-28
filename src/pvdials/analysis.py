@@ -219,11 +219,10 @@ def step_site_and_offset(
     zenith series this just produced) and the offset-preset comparison
     report together -- Gap A: Tier 4 structurally can't run before this.
 
-    tau: the run's already-resolved Tau (run_analysis(), via resolve_tau()),
-    threaded into build_site_context() so every provenance record's
-    site_context entity carries it (verification property #25). Phase 1's
-    own per-pair resolve_tau() call is unaffected -- see the comment at
-    run_analysis()'s early call.
+    tau: the run's already-resolved Tau (run_analysis(): the default via
+    resolve_tau(), or a tau_override), threaded into build_site_context() so
+    every provenance record's site_context entity carries it (verification
+    property #25). The same Tau reaches every per-pair Phase 1 and O4.
     """
     site = detect_site_metadata(load_result.uploaded.preamble, load_result.uploaded.table)
     if not site.is_complete():
@@ -236,7 +235,8 @@ def step_site_and_offset(
     offset = TimeOffset(config.offset_value_h, TAG_USER_ENTERED, override_reason=config.offset_reason)
     try:
         ctx = build_site_context(
-            load_result.weather, site, offset, defaults, tau=tau.value, tau_source=tau.source
+            load_result.weather, site, offset, defaults,
+            tau=tau.value, tau_source=tau.source, tau_reference=tau.reference,
         )
     except Exception as exc:
         raise AnalysisError(f"Step 1 (input data and configuration) failed: {exc}") from exc
@@ -359,12 +359,14 @@ def failed_check_names(checks: dict[str, ValidationResult]) -> list[str]:
 
 
 def step_disagreement_check(
-    pipelines: PipelineRunResult, ctx: SiteContext, defaults: dict
+    pipelines: PipelineRunResult, ctx: SiteContext, defaults: dict, tau: Tau | None = None
 ) -> dict[tuple[str, str], PairPhase1Result | str]:
     """A pair involving a pipeline that failed its own checks is reported as
     'not computable' before Phase 1 even runs -- running a disagreement
     comparison against known-bad output would just measure the bug, not any
     real disagreement.
+
+    tau: the run's resolved Tau; None resolves the default per pair.
     """
     results: dict[tuple[str, str], PairPhase1Result | str] = {}
     for label_a, label_b in PAIR_LABELS:
@@ -380,7 +382,7 @@ def step_disagreement_check(
             results[(label_a, label_b)] = run_phase1(
                 pipelines.configs[label_a], pipelines.results[label_a],
                 pipelines.configs[label_b], pipelines.results[label_b],
-                ctx.daylight, defaults=defaults,
+                ctx.daylight, defaults=defaults, tau=tau,
             )
         except Exception as exc:
             raise AnalysisError(
@@ -464,6 +466,7 @@ def step_reexecution(
     ctx: SiteContext,
     defaults: dict,
     analysis_id: str,
+    tau: Tau | None = None,
 ) -> FinalRunResult | None:
     """Non-interactive: goes straight to confirm() with the one YAML-given
     candidate. propose()/retry() exist for a *live* user comparing options
@@ -505,6 +508,7 @@ def step_reexecution(
         adr_inverters=hardware.adr_inverters,
         daylight=ctx.daylight,
         defaults=defaults,
+        tau=tau,
         on_record=record_ids.append,
     )
     try:
@@ -550,7 +554,10 @@ def phase1_to_dict(result: PairPhase1Result | str) -> dict[str, Any]:
         "outcome": result.outcome,
         "k": result.k.name if result.k is not None else None,
         "differing_stages": [s.name for s in ALL_STAGES if s in result.differing_stages],
-        "tau": {"value": _safe_float(result.tau.value), "source": result.tau.source},
+        "tau": {
+            "value": _safe_float(result.tau.value), "source": result.tau.source,
+            **({"reference": result.tau.reference} if result.tau.reference is not None else {}),
+        },
         "metrics": [
             {
                 "stage": stage.name,
@@ -648,7 +655,9 @@ class AnalysisRunResult:
     reexec_result: FinalRunResult | None
 
 
-def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunResult:
+def run_analysis(
+    yaml_path: str, analysis_id: str | None = None, tau_override: Tau | None = None
+) -> AnalysisRunResult:
     """Runs every step in order, saving progress to the analyses table after
     each one (status = last step reached), so a crash mid-run still leaves a
     queryable partial record. Checks Postgres reachability first, before
@@ -665,17 +674,13 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     analysis_id = analysis_id or uuid.uuid4().hex
     config = parse_analysis_yaml(yaml_path)
     defaults = load_defaults()
-    # tau is now resolved in two places: here (early, so the SiteContext and
-    # every provenance record can carry it) and again, unchanged, once per
-    # pair inside run_phase1() (dla/phase1.py, via step_disagreement_check).
-    # Both calls use the same resolve_tau(None, defaults) with the same
-    # defaults object, so they are guaranteed to agree -- not restructuring
-    # Phase 1 to remove the second call. If analysis.yaml ever gains a real
-    # tau-override field, that value must reach BOTH call sites, ideally by
-    # resolving once here and threading the result into
-    # step_disagreement_check too, rather than letting the two resolutions
-    # drift apart.
-    tau = resolve_tau(None, defaults)
+    # tau is resolved once, here, and the same Tau is threaded to the
+    # SiteContext (so every provenance record carries it), every per-pair
+    # run_phase1() and O4 -- so the value and its source label can't drift
+    # apart. tau_override (a caller's run-level setting, with its own source
+    # label and reference) replaces the default; without it this is exactly
+    # the default every run has always used.
+    tau = tau_override if tau_override is not None else resolve_tau(None, defaults)
     inputs_dict = {
         "name": config.name,
         "weather_file": config.weather_file,
@@ -697,6 +702,10 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
         "pipelines": config.pipelines,
         "reexecution": config.reexecution,
     }
+    if tau_override is not None:
+        inputs_dict["tau_override"] = {
+            "value": tau_override.value, "source": tau_override.source, "reference": tau_override.reference,
+        }
     save_analysis(analysis_id, config.name, "started", inputs_dict)
 
     load_result = step_load_and_validate(config.weather_file)
@@ -711,7 +720,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     pipelines_dict = report.stage_summaries_to_dict(stage_summaries)
     save_analysis(analysis_id, config.name, "pipelines_done", inputs_dict, pipelines=pipelines_dict)
 
-    phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults)
+    phase1_results = step_disagreement_check(pipelines, site_result.ctx, defaults, tau)
     phase1_dict = {f"{a}-{b}": phase1_to_dict(r) for (a, b), r in phase1_results.items()}
     save_analysis(
         analysis_id, config.name, "phase1_done", inputs_dict, phase1=phase1_dict, pipelines=pipelines_dict
@@ -732,7 +741,7 @@ def run_analysis(yaml_path: str, analysis_id: str | None = None) -> AnalysisRunR
     )
 
     reexec_result = step_reexecution(
-        config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id
+        config, pipelines, phase1_results, hardware, site_result.ctx, defaults, analysis_id, tau
     )
     reexec_dict = reexec_to_dict(reexec_result)
     save_analysis(

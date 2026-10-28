@@ -21,8 +21,11 @@ from pvdials.analysis import (
     step_site_and_offset,
 )
 from pvdials.config import load_defaults
+from pvdials.dla.metrics import Tau
 from pvdials.provenance.analyses import load_analysis
 from pvdials.provenance.db import get_connection, is_reachable, run_schema
+from pvdials.provenance.model import unwrap_value
+from pvdials.provenance.replay import replay
 from pvdials.types import Stage
 from tests.dla.mock_adapters import install_mock_model, install_mock_temperature_model
 
@@ -464,7 +467,7 @@ def test_dla_output_object_has_every_specified_field(tmp_path, monkeypatch):
         assert field in p3_ab, f"Phase 3 missing {field!r}: {sorted(p3_ab)}"
 
 
-def _run_ab_outcome3_analysis(tmp_path, monkeypatch, fixed_tau: float | None):
+def _run_ab_outcome3_analysis(tmp_path, monkeypatch, fixed_tau: float | None, tau_override=None):
     """Shared setup: A-B reaches outcome 3, A-C/B-C reach outcome 1 -- same
     construction as test_only_one_qualifying_pair_runs_phase2_and_gates_
     phase3_per_pair, reused here for the tau-provenance tests. Works at both
@@ -486,7 +489,23 @@ def _run_ab_outcome3_analysis(tmp_path, monkeypatch, fixed_tau: float | None):
             "C": {**BASE_YAML["pipelines"]["A"], "temperature": "mock_c"},
         },
     }
-    return run_analysis(_write_yaml(tmp_path, overrides))
+    return run_analysis(_write_yaml(tmp_path, overrides), tau_override=tau_override)
+
+
+def _site_contexts_recorded_for_analysis(analysis_id: str) -> list[tuple[str, dict]]:
+    """(record id, site_context entity) for every provenance record linked to this analysis."""
+    with get_connection() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT pr.id, pr.document FROM provenance_records pr "
+            "JOIN analysis_records ar ON ar.record_id = pr.id "
+            "WHERE ar.analysis_id = %s",
+            (analysis_id,),
+        )
+        rows = cur.fetchall()
+    return [
+        (record_id, document["bundle"][next(iter(document["bundle"]))]["entity"]["site_context"])
+        for record_id, document in rows
+    ]
 
 
 def _tau_values_recorded_for_analysis(analysis_id: str) -> list[float]:
@@ -528,6 +547,49 @@ def test_recorded_tau_equals_phase1_tau(tmp_path, monkeypatch, fixed_tau):
     assert recorded, "expected at least one provenance record for this analysis"
     for value in recorded:
         assert value == pytest.approx(expected_tau)
+
+
+def test_tau_override_is_recorded_with_its_own_source_and_replays(tmp_path, monkeypatch):
+    """A run-level tau override (run_analysis(tau_override=...)) is recorded
+    as what it is -- its value, its own source label and its reference -- in
+    the Phase 1 result, the saved inputs and every provenance record, never
+    as "default"; and a record that used it still replays (the replay test
+    reruns stage outputs, which tau doesn't touch).
+    """
+    override = Tau(0.10, "run setting TEST_TAU", "tau_selection.json (sha256 abc123)")
+    run = _run_ab_outcome3_analysis(tmp_path, monkeypatch, None, tau_override=override)
+
+    assert run.phase1_results[("A", "B")].tau == override
+    assert build_results_dict(run)["phase1"]["A-B"]["tau"] == {
+        "value": 0.10, "source": "run setting TEST_TAU", "reference": "tau_selection.json (sha256 abc123)",
+    }
+    assert load_analysis(run.analysis_id)["inputs"]["tau_override"] == {
+        "value": 0.10, "source": "run setting TEST_TAU", "reference": "tau_selection.json (sha256 abc123)",
+    }
+
+    recorded = _site_contexts_recorded_for_analysis(run.analysis_id)
+    assert recorded, "expected at least one provenance record for this analysis"
+    for _, site_context in recorded:
+        assert float(unwrap_value(site_context["tau_value"])) == pytest.approx(0.10)
+        assert unwrap_value(site_context["tau_source"]) == "run setting TEST_TAU"
+        assert unwrap_value(site_context["tau_reference"]) == "tau_selection.json (sha256 abc123)"
+
+    assert replay(recorded[0][0]).passed
+
+
+def test_without_an_override_records_carry_only_the_default(tmp_path, monkeypatch):
+    """No tau_override: the records, the Phase 1 result and the saved inputs
+    carry exactly what they always did -- source "default", no reference,
+    no tau_override entry."""
+    run = _run_ab_outcome3_analysis(tmp_path, monkeypatch, None)
+
+    assert "reference" not in build_results_dict(run)["phase1"]["A-B"]["tau"]
+    assert "tau_override" not in load_analysis(run.analysis_id)["inputs"]
+    recorded = _site_contexts_recorded_for_analysis(run.analysis_id)
+    assert recorded
+    for _, site_context in recorded:
+        assert unwrap_value(site_context["tau_source"]) == "default"
+        assert "tau_reference" not in site_context
 
 
 def test_every_record_in_one_analysis_shares_the_same_tau_value(tmp_path, monkeypatch):

@@ -24,7 +24,6 @@ from pathlib import Path
 
 import numpy as np
 
-from pvdials.config import load_defaults
 from pvdials.dla.phase1 import run_phase1
 from pvdials.dla.phase3 import Phase3NotComputable, pair_is_shapley_computable, run_phase3
 from pvdials.physics.pipeline import run_pipeline
@@ -37,20 +36,54 @@ from experiments.evaluation.chain_population import build_configs, default_hardw
 from experiments.evaluation.comparators import argmax_with_ties, attribution_gap, averaged_game, coalition_key, rank_agreement, shapley_values, wilson_interval
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.weather_source import verify_thesis_weather_file
+from experiments.tau_calibration.run_settings import (
+    OFFSET_H,
+    RADIATION_DATABASE,
+    SENSITIVITY,
+    TAU,
+    output_dir,
+    require_tau,
+    run_defaults,
+    run_record,
+    stable_band,
+    tau_record,
+)
 
 SEED = 20260929
 ENSEMBLE_SIZE = 100
-TAU = 0.093
 STAGE_ORDER = (Stage.DECOMPOSITION, Stage.TRANSPOSITION, Stage.TEMPERATURE, Stage.DC, Stage.AC)
 TAU_GRID = np.linspace(0, 1, 501)
-BAND = (0.088, 0.098)
 
-CACHE_DIR = Path(__file__).resolve().parents[1] / "tau_calibration" / "outputs" / "trivial_plateau_amendment" / "exhaustive_cache"
-OUT_DIR = Path(__file__).resolve().parent / "outputs" / "step4"
+CACHE_DIR = output_dir(
+    Path(__file__).resolve().parents[1] / "tau_calibration" / "outputs" / "trivial_plateau_amendment", tau_specific=False,
+) / "exhaustive_cache"
+OUT_DIR = output_dir(Path(__file__).resolve().parent / "outputs" / "step4")
 
 
 def log(msg: str) -> None:
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def load_cache_run_record() -> dict:
+    """The run record R1 wrote beside the cache; stops on a cache built at a
+    different offset than this run's. The 0 h cache predates run records --
+    its offset is the 0.0 h hard-coded in the script that built it.
+    """
+    path = CACHE_DIR.parent / "run_record.json"
+    if not path.exists():
+        if OFFSET_H != 0.0:
+            log(f"STOP: no run_record.json beside {CACHE_DIR} -- run R1 at {OFFSET_H:g} h first.")
+            sys.exit(1)
+        return {
+            "time_offset_h": 0.0, "time_offset_source": "user_entered", "radiation_database": RADIATION_DATABASE,
+            "note": "cache built before run records existed; offset as hard-coded in the script that built it",
+            **tau_record(),
+        }
+    record = json.loads(path.read_text())
+    if record["time_offset_h"] != OFFSET_H:
+        log(f"STOP: cache was built at {record['time_offset_h']:g} h, this run is at {OFFSET_H:g} h.")
+        sys.exit(1)
+    return {**{k: record[k] for k in ("time_offset_h", "time_offset_source", "radiation_database")}, **tau_record()}
 
 
 def load_cache():
@@ -79,10 +112,35 @@ def baseline_b_idx_vectorized(nrmsd_matrix: np.ndarray) -> np.ndarray:
     return np.argmax(rises, axis=1)
 
 
-def step1_write_chains(labels: list[str]) -> list[str]:
+def outcome_counts(nrmsd_matrix: np.ndarray, tau: float) -> dict[str, int]:
+    """Phase 1 outcome counts over all pairs: 1 = no stage over tau; 2 =
+    some stage over tau and AC over tau; 3 = some stage over tau, AC not."""
+    has_k = k_idx_at_tau(nrmsd_matrix, tau) != -1
+    ac_over = nrmsd_matrix[:, STAGE_ORDER.index(Stage.AC)] > tau
+    return {"1": int((~has_k).sum()), "2": int((has_k & ac_over).sum()), "3": int((has_k & ~ac_over).sum())}
+
+
+def stage_counts(nrmsd_matrix: np.ndarray, min_s_idx: np.ndarray, tau: float) -> dict:
+    """How many of all pairs each method names each stage for (STAGE_ORDER);
+    Phase 1 names none for outcome-1 pairs."""
+    k_idx = k_idx_at_tau(nrmsd_matrix, tau)
+    b_idx = baseline_b_idx_vectorized(nrmsd_matrix)
+
+    def per_stage(idx):
+        return [int((idx == i).sum()) for i in range(len(STAGE_ORDER))]
+
+    return {
+        "stage_order": [s.name for s in STAGE_ORDER],
+        "phase1": per_stage(k_idx), "phase1_none": int((k_idx == -1).sum()),
+        "baseline_a": per_stage(min_s_idx), "baseline_b": per_stage(b_idx),
+    }
+
+
+def step1_write_chains(labels: list[str], record: dict) -> list[str]:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     chains = sample_chains(labels, ENSEMBLE_SIZE, SEED)
-    (OUT_DIR / "chains.json").write_text(json.dumps({"seed": SEED, "n": ENSEMBLE_SIZE, "chains": chains}, indent=2))
+    (OUT_DIR / "chains.json").write_text(json.dumps(
+        {"seed": SEED, "n": ENSEMBLE_SIZE, "chains": chains, "run_record": record}, indent=2))
     log(f"Wrote {len(chains)} sampled chains to chains.json (seed={SEED}).")
     return chains
 
@@ -93,12 +151,14 @@ def step2_all_pairs_baseline_check(nrmsd_matrix, min_s_idx) -> dict:
     outcome1_share = float(outcome1.mean())
     k_eq_mins_share = float(((k_idx == min_s_idx) & (~outcome1)).mean())
 
-    EXPECTED_OUTCOME1 = 0.3027
-    EXPECTED_K_EQ_MINS = 0.4583
+    # The stated figures are the 0 h run's own; at any other offset there is
+    # nothing to match against (None, not False -- main() stops only on False).
+    EXPECTED_OUTCOME1 = 0.3027 if OFFSET_H == 0.0 else None
+    EXPECTED_K_EQ_MINS = 0.4583 if OFFSET_H == 0.0 else None
     exact_match = (
         abs(outcome1_share - EXPECTED_OUTCOME1) < 5e-5
         and abs(k_eq_mins_share - EXPECTED_K_EQ_MINS) < 5e-5
-    )
+    ) if OFFSET_H == 0.0 else None
     part_b_share = float(((k_idx > min_s_idx) & (~outcome1)).mean())
     informative_rate = float(outcome1_share + part_b_share)
 
@@ -123,6 +183,7 @@ def step2_all_pairs_baseline_check(nrmsd_matrix, min_s_idx) -> dict:
         "informative_rate": informative_rate,
         "informative_rate_part_a_outcome1": outcome1_share,
         "informative_rate_part_b_k_gt_mins": part_b_share,
+        "outcome_counts": outcome_counts(nrmsd_matrix, TAU),
         "baseline_b_agreement_with_k": b_agreement,
         "phase1_a_b_all_agree_share": float(all_three_agree),
         "k_times_b_table": ktable.tolist(),
@@ -144,7 +205,7 @@ def step3_tau_band_curve(nrmsd_matrix, min_s_idx) -> dict:
         b_agreement_by_tau.append(float((b_idx[has_k] == k_idx[has_k]).mean()) if has_k.any() else None)
     return {
         "tau_grid": TAU_GRID.tolist(),
-        "stable_band": list(BAND),
+        "stable_band": list(stable_band()),
         "outcome1_share_by_tau": outcome1_by_tau,
         "k_eq_min_s_share_by_tau": k_eq_mins_by_tau,
         "baseline_b_agreement_by_tau": b_agreement_by_tau,
@@ -159,33 +220,41 @@ def build_pair_to_row(n: int) -> dict[tuple[int, int], int]:
 def main() -> None:
     weather_info = verify_thesis_weather_file()
     log(f"Weather file verified: {weather_info}")
+    require_tau(allow_sensitivity=True)
+    cache_record = load_cache_run_record()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    (OUT_DIR / "weather_file.json").write_text(json.dumps(weather_info, indent=2))
+    (OUT_DIR / "weather_file.json").write_text(json.dumps({**weather_info, "run_record": cache_record}, indent=2))
     log("Loading exhaustive cache...")
     nrmsd_matrix, min_s_idx, labels = load_cache()
     label_to_index = {label: i for i, label in enumerate(labels)}
 
-    chains = step1_write_chains(labels)
+    chains = step1_write_chains(labels, cache_record)
 
     log("All-pairs Baseline A/B re-derivation...")
     all_pairs_report = step2_all_pairs_baseline_check(nrmsd_matrix, min_s_idx)
+    all_pairs_report["stage_counts"] = stage_counts(nrmsd_matrix, min_s_idx, TAU)
+    all_pairs_report["run_record"] = cache_record
     (OUT_DIR / "all_pairs_baseline_check.json").write_text(json.dumps(all_pairs_report, indent=2))
     log(
         f"outcome1={all_pairs_report['outcome1_share']:.6%} "
         f"k=min(S)={all_pairs_report['k_eq_min_s_share']:.6%} "
         f"exact_match={all_pairs_report['exact_match_to_stated_figures']}"
     )
-    if not all_pairs_report["exact_match_to_stated_figures"]:
+    if all_pairs_report["exact_match_to_stated_figures"] is False:
         log("STOP: all-pairs Baseline A figures do not match the stated 30.27%/45.83%.")
         sys.exit(1)
 
     log("tau-band curve (whole grid)...")
     band_report = step3_tau_band_curve(nrmsd_matrix, min_s_idx)
+    band_report["run_record"] = cache_record
     (OUT_DIR / "tau_band_curve.json").write_text(json.dumps(band_report, indent=2))
     log("tau-band curve written.")
+    if SENSITIVITY:
+        log("Sensitivity run: all-pairs Phase 1 only -- the ensemble and Phase 3 belong to the main run.")
+        return
 
     log("Building ensemble physics (100 chains, record=False)...")
-    defaults = load_defaults()
+    defaults = run_defaults()
     module, mounting = default_hardware()
     all_configs = {c.label: c for c in build_configs(module, mounting)}
     with ChandrupatlaWarningFilter() as wf:
@@ -198,6 +267,11 @@ def main() -> None:
     if wf.count:
         log(f"({wf.count} known scipy chandrupatla 0/0 warnings suppressed)")
     log(f"Ran {len(results_by_label)} chains' physics.")
+    ensemble_record = run_record(shared_cec.ctx)
+    if ensemble_record["time_offset_h"] != cache_record["time_offset_h"]:
+        log(f"STOP: ensemble physics ran at {ensemble_record['time_offset_h']:g} h, "
+            f"the cache at {cache_record['time_offset_h']:g} h.")
+        sys.exit(1)
 
     log("Ensemble Phase 1 (production run_phase1), cross-checked against the cache...")
     pair_to_row = build_pair_to_row(len(labels))
@@ -257,10 +331,14 @@ def main() -> None:
     (OUT_DIR / "ensemble_phase1.json").write_text(json.dumps({
         "max_relative_diff_vs_cache": max_relative_diff_overall,
         "pairs": ensemble_phase1_records,
+        "run_record": ensemble_record,
     }, indent=2))
 
     log("Ensemble Phase 3 on eligible pairs (record=False)...")
-    run_phase3_on_ensemble(all_configs, results_by_label, shared_cec, shared_adr, daylight, defaults, ensemble_phase1_records)
+    run_phase3_on_ensemble(
+        all_configs, results_by_label, shared_cec, shared_adr, daylight, defaults, ensemble_phase1_records,
+        run_record=ensemble_record,
+    )
 
     log("Step 4 complete.")
 
@@ -273,7 +351,7 @@ def _differing_stages_from_configs(config_a, config_b):
 def run_phase3_on_ensemble(
     all_configs, results_by_label, shared_cec, shared_adr, daylight, defaults, phase1_records,
     jsonl_filename="phase3_results.jsonl", summary_filename="phase3_summary.json",
-    exclusions_filename="phase3_exclusions.json", save_v_tables: bool = False,
+    exclusions_filename="phase3_exclusions.json", save_v_tables: bool = False, *, run_record: dict,
 ):
     jsonl_path = OUT_DIR / jsonl_filename
     already_done = set()
@@ -320,13 +398,14 @@ def run_phase3_on_ensemble(
                 continue
 
             out_rec = _phase3_pair_report(pair, differing, result3, save_v_tables=save_v_tables)
+            out_rec["run_record"] = run_record
             out_f.write(json.dumps(out_rec) + "\n")
             out_f.flush()
             if eligible_count % 50 == 0:
                 log(f"  {eligible_count} eligible pairs processed...")
 
     log(f"Phase 3 done. Eligible processed this run: {eligible_count}. Excluded: {excluded}")
-    (OUT_DIR / exclusions_filename).write_text(json.dumps(excluded, indent=2))
+    (OUT_DIR / exclusions_filename).write_text(json.dumps({**excluded, "run_record": run_record}, indent=2))
     summarize_phase3(jsonl_path, summary_filename)
 
 
@@ -422,6 +501,7 @@ def summarize_phase3(jsonl_path: Path, summary_filename: str = "phase3_summary.j
             for r in disagreeing
         ],
         "share_pairs_with_any_phi_final_below_neg_eps": share_negative_phi,
+        "run_record": records[0].get("run_record"),
     }
     (OUT_DIR / summary_filename).write_text(json.dumps(summary, indent=2))
     log(f"Phase 3 summary written. n_eligible={len(records)}, "

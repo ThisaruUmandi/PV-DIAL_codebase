@@ -13,16 +13,27 @@ from pathlib import Path
 
 from experiments.evaluation.comparators import shapley_values
 from experiments.evaluation.wording import check_banned_words
+from experiments.tau_calibration.run_settings import (
+    OFFSET_H,
+    TAU,
+    ZERO_H_TAU,
+    output_dir,
+    require_tau,
+    sensitivity_dir,
+    stable_band,
+)
 from pvdials.types import Stage
 
 BASE = Path(__file__).resolve().parent / "outputs"
 OUT_DIR = BASE
 FIGURES_DIR = BASE / "figures"
+# At a non-zero offset: read that offset's step folders, write beside the 0 h
+# files under new names, so evaluation_results.json/evaluation_table.md (0 h)
+# stay untouched.
+OUT_SUFFIX = "" if OFFSET_H == 0.0 else f"_offset_{OFFSET_H:g}h"
 
 SEED_ENSEMBLE = 20260929
 SEED_REPLAY_SAMPLE = 20260929
-TAU_DEFAULT = 0.093
-STABLE_BAND = (0.088, 0.098)
 EFFICIENCY_EPS = 1e-9
 PROVENANCE_TOLERANCE = 1e-9
 
@@ -31,17 +42,113 @@ def _load(path: Path):
     return json.loads(path.read_text())
 
 
+def _step(name: str) -> Path:
+    return output_dir(BASE / name)
+
+
+def _check_run_records(inputs: dict[str, dict]) -> dict | None:
+    """Every input that carries a run record must agree on offset and tau --
+    stops on a mix of runs. The 0 h inputs predate run records (None)."""
+    records = {name: d["run_record"] for name, d in inputs.items() if isinstance(d, dict) and d.get("run_record")}
+    for name, r in records.items():
+        if r["time_offset_h"] != OFFSET_H or r.get("tau", TAU) != TAU:
+            raise SystemExit(f"STOP: {name} was run at {r['time_offset_h']:g} h / tau {r.get('tau')}, "
+                             f"this table is for {OFFSET_H:g} h / tau {TAU:g}.")
+    if OFFSET_H != 0.0 and len(records) != len(inputs):
+        raise SystemExit(f"STOP: inputs without a run record: {sorted(set(inputs) - set(records))}")
+    return next(iter(records.values()), None)
+
+
+ZERO_H_CACHE = (Path(__file__).resolve().parents[1] / "tau_calibration" / "outputs" / "trivial_plateau_amendment"
+                / "exhaustive_cache" / "nrmsd_matrix_n2058_exhaustive.npy")
+
+
+def _zero_h_outcome_counts(all_pairs: dict) -> dict:
+    """The 0 h all-pairs file predates stored outcome counts: derived from
+    the 0 h R1 cache at its own tau, checked against its stored outcome-1 share."""
+    if "outcome_counts" in all_pairs:
+        return all_pairs["outcome_counts"]
+    import numpy as np
+
+    from experiments.evaluation.step4_ensemble import outcome_counts
+
+    counts = outcome_counts(np.load(ZERO_H_CACHE), all_pairs["tau"])
+    assert counts["1"] == round(all_pairs["outcome1_share"] * all_pairs["n_pairs"]), "0 h cache and all-pairs file disagree"
+    return counts
+
+
+def _sensitivity_column(all_pairs: dict, phase3_summary: dict | None, counts: dict) -> dict:
+    """OAT/LOO come from Phase 3 on a main run's ensemble; None where there is none."""
+    return {
+        "tau": all_pairs["tau"],
+        "differs_from_baseline_a": all_pairs["informative_rate"],
+        "outcome1_share": all_pairs["informative_rate_part_a_outcome1"],
+        "k_later_share": all_pairs["informative_rate_part_b_k_gt_mins"],
+        "outcome_counts": counts,
+        "oat_same_top_stage": None if phase3_summary is None else phase3_summary["rank_agreement_singleton_overall"]["rate"],
+        "loo_same_top_stage": None if phase3_summary is None else phase3_summary["rank_agreement_loo_overall"]["rate"],
+    }
+
+
+def _sensitivity_table(main_all_pairs: dict, main_phase3_summary: dict) -> dict:
+    """0 h @ 0 h tau | this offset @ 0 h tau (the sensitivity run) | this offset @ its own tau (main)."""
+    zero_all_pairs = _load(BASE / "step4" / "all_pairs_baseline_check.json")
+    sens_file = sensitivity_dir(BASE / "step4") / "all_pairs_baseline_check.json"
+    if not sens_file.exists():
+        raise SystemExit(f"STOP: no {sens_file} -- run step4 with PVDIAL_SENSITIVITY=1 PVDIAL_TAU={ZERO_H_TAU:g} first.")
+    sens_all_pairs = _load(sens_file)
+    record = sens_all_pairs.get("run_record") or {}
+    if record.get("time_offset_h") != OFFSET_H or record.get("tau") != ZERO_H_TAU or "run_kind" not in record:
+        raise SystemExit(f"STOP: {sens_file} is not the {OFFSET_H:g} h sensitivity run at tau {ZERO_H_TAU:g}: {record}")
+    return {
+        f"0 h, tau {zero_all_pairs['tau']:g}": _sensitivity_column(
+            zero_all_pairs, _load(BASE / "step4" / "phase3_summary.json"), _zero_h_outcome_counts(zero_all_pairs)),
+        f"{OFFSET_H:g} h, tau {ZERO_H_TAU:g}": _sensitivity_column(sens_all_pairs, None, sens_all_pairs["outcome_counts"]),
+        f"{OFFSET_H:g} h, tau {TAU:g}": _sensitivity_column(
+            main_all_pairs, main_phase3_summary, main_all_pairs["outcome_counts"]),
+    }
+
+
+def _sensitivity_section(table: dict, n_pairs: int) -> str:
+    def pct(v):
+        return "n/a" if v is None else f"{v * 100:.1f} %"
+
+    cols = list(table.values())
+    rows = [
+        ("tau", [f"{c['tau']:g}" for c in cols]),
+        ("Phase 1 differs from Baseline A", [pct(c["differs_from_baseline_a"]) for c in cols]),
+        ("... no stage over tau (outcome 1)", [pct(c["outcome1_share"]) for c in cols]),
+        ("... later stage than Baseline A", [pct(c["k_later_share"]) for c in cols]),
+        ("Outcome 1 / 2 / 3 (pairs)", [" / ".join(f"{c['outcome_counts'][o]:,}" for o in "123") for c in cols]),
+        ("OAT (single-stage) same top stage", [pct(c["oat_same_top_stage"]) for c in cols]),
+        ("OAT (leave-one-out) same top stage", [pct(c["loo_same_top_stage"]) for c in cols]),
+    ]
+    lines = ["## Sensitivity -- time offset and tau", "",
+             "| | " + " | ".join(table) + " |", "|---" * (len(table) + 1) + "|"]
+    lines += [f"| {name} | " + " | ".join(values) + " |" for name, values in rows]
+    lines += ["", f"Phase 1 rows: all {n_pairs:,} pairs. OAT rows: Phase 3 on the 100-chain ensemble, which only the main "
+              "runs have, so the middle column (the sensitivity run, all-pairs Phase 1 only) has none.", ""]
+    return "\n".join(lines)
+
+
 def main() -> None:
-    step2_colombo = _load(BASE / "step2" / "colombo_check.json")
-    step2_pair = _load(BASE / "step2" / "two_stage_pair_v_tables.json")
-    step3 = _load(BASE / "step3" / "perturbation_cases.json")
-    step4_all_pairs = _load(BASE / "step4" / "all_pairs_baseline_check.json")
-    step4_ensemble_phase1 = _load(BASE / "step4" / "ensemble_phase1.json")
-    step4_phase3_summary = _load(BASE / "step4" / "phase3_summary.json")
-    step4_phase3_exclusions = _load(BASE / "step4" / "phase3_exclusions.json")
-    step4_chains = _load(BASE / "step4" / "chains.json")
-    step4_single_anchor = _load(BASE / "step4" / "single_anchor_summary.json")
-    step5 = _load(BASE / "step5" / "replay_results.json")
+    require_tau()
+    step2_colombo = _load(_step("step2") / "colombo_check.json")
+    step2_pair = _load(_step("step2") / "two_stage_pair_v_tables.json")
+    step3 = _load(_step("step3") / "perturbation_cases.json")
+    step4_all_pairs = _load(_step("step4") / "all_pairs_baseline_check.json")
+    step4_ensemble_phase1 = _load(_step("step4") / "ensemble_phase1.json")
+    step4_phase3_summary = _load(_step("step4") / "phase3_summary.json")
+    step4_phase3_exclusions = _load(_step("step4") / "phase3_exclusions.json")
+    step4_chains = _load(_step("step4") / "chains.json")
+    step4_single_anchor = _load(_step("step4") / "single_anchor_summary.json")
+    step5 = _load(_step("step5") / "replay_results.json")
+    record = _check_run_records({
+        "step2/colombo_check": step2_colombo, "step2/two_stage_pair": step2_pair, "step3": step3,
+        "step4/all_pairs": step4_all_pairs, "step4/ensemble_phase1": step4_ensemble_phase1,
+        "step4/phase3_summary": step4_phase3_summary, "step4/phase3_exclusions": step4_phase3_exclusions,
+        "step4/chains": step4_chains, "step4/single_anchor": step4_single_anchor, "step5": step5,
+    })
 
     # Ensemble-level informative rate / Baseline B agreement (computed from
     # ensemble_phase1.json's per-pair records -- not aggregated at Step 4
@@ -59,9 +166,10 @@ def main() -> None:
     }
 
     evaluation_results = {
+        "run_record": record,
         "fixed_values": {
-            "default_tau": TAU_DEFAULT,
-            "stable_tau_band": list(STABLE_BAND),
+            "default_tau": TAU,
+            "stable_tau_band": list(stable_band()),
             "ensemble_seed": SEED_ENSEMBLE,
             "replay_sample_seed": SEED_REPLAY_SAMPLE,
             "efficiency_tolerance_eps": EFFICIENCY_EPS,
@@ -82,18 +190,23 @@ def main() -> None:
         },
     }
 
-    (OUT_DIR / "evaluation_results.json").write_text(json.dumps(evaluation_results, indent=2))
+    sensitivity = None if OFFSET_H == 0.0 else _sensitivity_table(step4_all_pairs, step4_phase3_summary)
+    if sensitivity is not None:
+        evaluation_results["sensitivity_table"] = sensitivity
+    (OUT_DIR / f"evaluation_results{OUT_SUFFIX}.json").write_text(json.dumps(evaluation_results, indent=2))
 
     md = _build_markdown(
         step4_all_pairs, ensemble_informative, step4_phase3_summary,
         step4_phase3_exclusions, step5, step2_pair, step3, step4_single_anchor,
     )
+    if sensitivity is not None:
+        md += "\n" + _sensitivity_section(sensitivity, step4_all_pairs["n_pairs"])
     hits = check_banned_words(md)
     if hits:
         raise RuntimeError(f"Banned words found in evaluation_table.md:\n" + "\n".join(hits))
-    (OUT_DIR / "evaluation_table.md").write_text(md)
+    (OUT_DIR / f"evaluation_table{OUT_SUFFIX}.md").write_text(md)
 
-    print("Step 6 done. evaluation_results.json and evaluation_table.md written.")
+    print(f"Step 6 done. evaluation_results{OUT_SUFFIX}.json and evaluation_table{OUT_SUFFIX}.md written.")
     print(f"Banned-word scan: clean ({len(hits)} hits).")
 
 

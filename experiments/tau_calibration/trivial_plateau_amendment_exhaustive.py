@@ -19,11 +19,13 @@ buffering through `tee`, not a real hang -- see trivial_plateau_amendment.py):
 from __future__ import annotations
 
 import itertools
+import json
 import time
 from pathlib import Path
 
 import numpy as np
 from n34_calibration import CANDIDATE_WIDTHS, DEFAULT_TAU_STABLE_THRESHOLD, TAU_GRID
+from run_settings import SENSITIVITY, SENSITIVITY_ENV, TAU_SELECTION_FILE, output_dir, run_record
 from tau_calibration import STAGE_ORDER, k_matrix_for_grid
 from tau_ensemble_timing import build_experiment_context, run_all_pipelines
 from trivial_plateau_amendment import (
@@ -35,8 +37,11 @@ from trivial_plateau_amendment import (
 
 from pvdials.dla.phase1 import _differing_stages, run_phase1
 
-OUTPUT_DIR = Path(__file__).parent / "outputs" / "trivial_plateau_amendment"
+OUTPUT_DIR = output_dir(Path(__file__).parent / "outputs" / "trivial_plateau_amendment", tau_specific=False)
 CACHE_DIR = OUTPUT_DIR / "exhaustive_cache"
+# The .npy/.txt/.png outputs can't carry the run record themselves; this file
+# beside them does, and step4_ensemble.py checks it before reading the cache.
+RUN_RECORD_FILE = OUTPUT_DIR / "run_record.json"
 LOG_EVERY = 50_000
 
 
@@ -74,6 +79,8 @@ def confirm_all_chains_pass(configs, results) -> None:
 
 
 def main() -> None:
+    if SENSITIVITY:
+        raise SystemExit(f"STOP: R1 selects tau, it doesn't apply one -- run it without {SENSITIVITY_ENV}.")
     print("=== Building experiment context and running all 2,058 pipelines (fresh, real) ===", flush=True)
     experiment = build_experiment_context()
     configs = experiment.configs
@@ -128,6 +135,15 @@ def main() -> None:
     np.save(CACHE_DIR / "nrmsd_matrix_n2058_exhaustive.npy", nrmsd_matrix)
     np.save(CACHE_DIR / "min_s_idx_n2058_exhaustive.npy", min_s_idx)
     (CACHE_DIR / "labels_n2058_exhaustive.txt").write_text("\n".join(all_labels), encoding="utf-8")
+    RUN_RECORD_FILE.write_text(json.dumps({
+        **run_record(experiment.ctx, with_tau=False),
+        "covers": [
+            "exhaustive_cache/nrmsd_matrix_n2058_exhaustive.npy",
+            "exhaustive_cache/min_s_idx_n2058_exhaustive.npy",
+            "exhaustive_cache/labels_n2058_exhaustive.txt",
+            "amended_stability_curve_n2058_exhaustive.png",
+        ],
+    }, indent=2))
     print(f"Saved raw nRMSD matrix, min(S) index, and label order to {CACHE_DIR}", flush=True)
 
     nan_mask = np.isnan(nrmsd_matrix).any(axis=1)
@@ -166,6 +182,18 @@ def main() -> None:
             )
 
     default = select_default_tau(table)
+
+    def candidate(c):
+        return None if c is None else {
+            "width": c.width, "lo": c.lo, "hi": c.hi, "centre": c.centre, "stable_fraction": c.stable_fraction,
+        }
+
+    # What every later run's require_tau()/stable_band() reads.
+    TAU_SELECTION_FILE.write_text(json.dumps({
+        **run_record(experiment.ctx, with_tau=False),
+        "default": candidate(default),
+        "plateau_table": [candidate(c) for c in table],
+    }, indent=2))
     if default is not None:
         print(
             f"Amended default tau (exhaustive): {default.centre:.4f}  "

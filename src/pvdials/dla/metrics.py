@@ -40,14 +40,19 @@ N_MIN = math.ceil(1 / P5_QUANTILE) + 1
 
 @dataclass(frozen=True)
 class Tau:
-    """The materiality threshold. source: TAG_DEFAULT or TAG_USER_ENTERED.
+    """The materiality threshold. source: TAG_DEFAULT, TAG_USER_ENTERED, or a
+    caller's own label for a run-level override (e.g. a batch run's setting,
+    passed to run_analysis(tau_override=...)).
 
     tau is user-adjustable between runs, fixed within a run (KT §8.5). Every
-    run records tau and whether it is the default or user-set.
+    run records tau and where it came from. reference: what an override's
+    value was taken from (e.g. the file that selected it); None otherwise,
+    and then nothing extra is recorded.
     """
 
     value: float
     source: str
+    reference: str | None = None
 
 
 def resolve_tau(user_value: float | None, defaults: dict) -> Tau:

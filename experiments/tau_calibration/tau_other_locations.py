@@ -21,6 +21,17 @@ from pathlib import Path
 
 import numpy as np
 from n34_calibration import CANDIDATE_WIDTHS, TAU_GRID, sample_chains
+from run_settings import (
+    OFFSET_H,
+    OFFSET_SET,
+    RADIATION_DATABASE,
+    TAU,
+    output_dir,
+    require_tau,
+    stable_band,
+    tau_record,
+    time_offset,
+)
 from tau_calibration import STAGE_ORDER, change_cumsum, k_matrix_for_grid, stable_fraction
 from tau_ensemble_timing import (
     MODULE_NAME,
@@ -41,11 +52,10 @@ from pvdials.physics.hardware import CEC, load_module, resolve_array_size
 from pvdials.physics.mounting import resolve_mounting
 from pvdials.physics.site import build_site_context, offset_consistency_report
 
-OUTPUT_DIR = Path(__file__).parent / "outputs" / "other_locations"
+OUTPUT_DIR = output_dir(Path(__file__).parent / "outputs" / "other_locations")
 N = 100  # default; override with --n
 SEED = 0
-CURRENT_TAU = 0.093
-PLATEAU_LO, PLATEAU_HI = 0.088, 0.098
+CURRENT_TAU = TAU  # Colombo's tau and stable band at this run's offset (stable_band())
 EXPECTED_CHAINS = 2058
 TAU_SHIFT_FLAG = 0.02  # "well over" the +-0.01 sampling noise
 PLATEAU_FLAG_BELOW = 0.99
@@ -66,7 +76,9 @@ def header_offset_h(preamble: list[str]) -> float:
 def build_context(path: Path, defaults: dict):
     """Same calls as tau_ensemble_timing.build_experiment_context(), with the
     file and tilt as parameters. The time offset is chosen from this file's own
-    day/night consistency (header value vs 0 h), not copied from Colombo."""
+    day/night consistency (header value vs 0 h), not copied from Colombo --
+    unless PVDIAL_OFFSET_H is set, in which case every site uses that offset
+    (the run plan's fixed offset; the consistency counts are still printed)."""
     uploaded = load_uploaded_csv(path)
     weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
     site = detect_site_metadata(uploaded.preamble, uploaded.table)
@@ -78,10 +90,14 @@ def build_context(path: Path, defaults: dict):
             f"  offset {c.value_h:.2f} h ({c.label}): ghi>0 & sun down = {c.ghi_positive_sun_down}, "
             f"ghi==0 & sun up = {c.ghi_zero_sun_up}"
         )
-    best = min(report, key=lambda c: (c.ghi_positive_sun_down + c.ghi_zero_sun_up, c.value_h != header_h))
-    override = None if best.value_h == header_h else f"header states {header_h} h; file aligns with {best.value_h} h"
-    offset = TimeOffset(best.value_h, TAG_USER_ENTERED if override else TAG_FILE, override_reason=override)
-    print(f"  -> using offset {best.value_h:.2f} h" + (f" (override: {override})" if override else " (header value)"))
+    if OFFSET_SET:
+        offset = time_offset(uploaded.preamble)
+        print(f"  -> using offset {offset.value_h:.2f} h (fixed by {OFFSET_H:g} h run setting)")
+    else:
+        best = min(report, key=lambda c: (c.ghi_positive_sun_down + c.ghi_zero_sun_up, c.value_h != header_h))
+        override = None if best.value_h == header_h else f"header states {header_h} h; file aligns with {best.value_h} h"
+        offset = TimeOffset(best.value_h, TAG_USER_ENTERED if override else TAG_FILE, override_reason=override)
+        print(f"  -> using offset {best.value_h:.2f} h" + (f" (override: {override})" if override else " (header value)"))
     ctx = build_site_context(weather, site, offset, defaults)
 
     module = load_module(CEC, MODULE_NAME)
@@ -95,7 +111,7 @@ def build_context(path: Path, defaults: dict):
     experiment = ExperimentContext(
         defaults=defaults, ctx=ctx, configs=configs, shared_cec=shared_cec, shared_adr=shared_adr
     )
-    return experiment, site, best.value_h
+    return experiment, site
 
 
 def confirm_all_chains_pass(labels, results) -> None:
@@ -115,7 +131,7 @@ def confirm_all_chains_pass(labels, results) -> None:
 
 def run_site(path: Path, defaults: dict, n: int) -> dict:
     print(f"\n=== {path.name} (n={n}) ===", flush=True)
-    experiment, site, offset_h = build_context(path, defaults)
+    experiment, site = build_context(path, defaults)
     configs_by_label = {c.label: c for c in experiment.configs}
     sampled = sample_chains([c.label for c in experiment.configs], n, SEED)
     sampled_configs = [configs_by_label[label] for label in sampled]
@@ -149,16 +165,17 @@ def run_site(path: Path, defaults: dict, n: int) -> dict:
     table = amended_plateau_table(cumsum, TAU_GRID, CANDIDATE_WIDTHS, hi_mask, lo_mask)
     default = select_default_tau(table)
 
-    plateau_stable = stable_fraction(cumsum, grid_idx(PLATEAU_LO), grid_idx(PLATEAU_HI))
+    plateau_lo, plateau_hi = stable_band()
+    plateau_stable = stable_fraction(cumsum, grid_idx(plateau_lo), grid_idx(plateau_hi))
     share1_at = float(np.interp(CURRENT_TAU, TAU_GRID, share1))
     share_min_s_at = float(np.interp(CURRENT_TAU, TAU_GRID, share_min_s))
     max_stage = nrmsd[valid].max(axis=1)
 
     flags = []
     if plateau_stable < PLATEAU_FLAG_BELOW:
-        flags.append(f"plateau [{PLATEAU_LO},{PLATEAU_HI}] unstable ({plateau_stable:.3f})")
+        flags.append(f"plateau [{plateau_lo:g},{plateau_hi:g}] unstable ({plateau_stable:.3f})")
     if share1_at >= TRIVIAL_FLAG or share_min_s_at >= TRIVIAL_FLAG:
-        flags.append("trivial regime at 0.093")
+        flags.append(f"trivial regime at {CURRENT_TAU:g}")
     if default is None:
         flags.append("no width reaches 0.99")
     elif abs(default.centre - CURRENT_TAU) > TAU_SHIFT_FLAG:
@@ -169,7 +186,10 @@ def run_site(path: Path, defaults: dict, n: int) -> dict:
         "latitude": site.values["latitude"],
         "longitude": site.values["longitude"],
         "elevation": site.values.get("elevation"),
-        "offset_h": offset_h,
+        "offset_h": experiment.ctx.time_offset_h,
+        "time_offset_source": experiment.ctx.settings["time_offset_source"],
+        "radiation_database": RADIATION_DATABASE,
+        **tau_record(),
         "n_chains": n,
         "n_pairs": len(pairs),
         "nan_pairs": int((~valid).sum()),
@@ -177,8 +197,8 @@ def run_site(path: Path, defaults: dict, n: int) -> dict:
         "amended_default_width": None if default is None else default.width,
         "amended_default_stable_fraction": None if default is None else default.stable_fraction,
         "plateau_stable_fraction": plateau_stable,
-        "share_outcome1_at_0.093": share1_at,
-        "share_k_eq_minS_at_0.093": share_min_s_at,
+        f"share_outcome1_at_{CURRENT_TAU:g}": share1_at,
+        f"share_k_eq_minS_at_{CURRENT_TAU:g}": share_min_s_at,
         "max_stage_nrmsd": {
             "median": float(np.median(max_stage)),
             "p90": float(np.percentile(max_stage, 90)),
@@ -206,7 +226,7 @@ def print_table(rows: list[dict]) -> None:
         print(
             f"{r['latitude']:>7.3f},{r['longitude']:<9.3f}"
             f"{'none' if tau is None else format(tau, '.3f'):>7}{r['plateau_stable_fraction']:>9.3f}"
-            f"{r['share_outcome1_at_0.093']:>7.3f}{r['share_k_eq_minS_at_0.093']:>8.3f}"
+            f"{r[f'share_outcome1_at_{CURRENT_TAU:g}']:>7.3f}{r[f'share_k_eq_minS_at_{CURRENT_TAU:g}']:>8.3f}"
             f"{m['median']:>8.4f}{m['p90']:>8.4f}{m['p99']:>8.4f}{m['max']:>8.4f}  "
             f"{'; '.join(r['flags']) or 'ok'}"
         )
@@ -220,6 +240,7 @@ def main() -> None:
     paths = [Path(p) for p in args]
     if not paths:
         raise SystemExit(__doc__)
+    require_tau()
     defaults = load_defaults()
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     summary_path = OUTPUT_DIR / "summary.json"

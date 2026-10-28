@@ -14,8 +14,9 @@ from pathlib import Path
 import numpy as np
 
 from experiments.evaluation.comparators import attribution_gap, rank_agreement, wilson_interval
+from experiments.tau_calibration.run_settings import output_dir, require_tau
 
-BASE = Path(__file__).resolve().parent / "outputs" / "step4"
+BASE = output_dir(Path(__file__).resolve().parent / "outputs" / "step4")
 
 
 def _finite(x) -> bool:
@@ -23,6 +24,7 @@ def _finite(x) -> bool:
 
 
 def main() -> None:
+    require_tau()
     records = [json.loads(l) for l in open(BASE / "phase3_results_v2.jsonl") if l.strip()]
     print(f"{len(records)} eligible pairs loaded.")
 
@@ -85,6 +87,7 @@ def main() -> None:
             {"pair": p["pair"], "S": p["S"], "phi_ba": r["phi_ba"], "singleton_ba": p["singleton_ba"]}
             for p, r in zip(per_pair, records) if p["rank_agreement_ba"] == "disagree"
         ],
+        "run_record": records[0].get("run_record"),
     }
     (BASE / "single_anchor_summary.json").write_text(json.dumps(summary, indent=2))
     print(f"gap_ab: {summary['gap_ab']}")

@@ -77,6 +77,7 @@ def run_phase1(
     daylight: pd.Series,
     tau_value: float | None = None,
     defaults: dict | None = None,
+    tau: Tau | None = None,
 ) -> PairPhase1Result | str:
     """Run Phase 1 (and, equivalently, the disagreement check) for one pair.
 
@@ -84,13 +85,18 @@ def run_phase1(
     (identical for both pipelines, since it's derived from solar position
     only, never from pipeline output).
 
+    tau: an already-resolved Tau (a run's override, with its own source
+    label), used as is; otherwise tau_value or the default is resolved here.
+
     Returns a string ("not computable — <reason> at stage <s>") instead of a
     PairPhase1Result if any stage's nRMSD isn't a real number (28/09: too few
     daylight samples, or a zero pooled spread) -- there's no k, no outcome,
     nothing for Phase 2/3/O4 to use for that pair.
     """
+    if tau is not None and tau_value is not None:
+        raise ValueError("Give tau or tau_value, not both.")
     defaults = defaults or load_defaults()
-    tau = resolve_tau(tau_value, defaults)
+    tau = tau if tau is not None else resolve_tau(tau_value, defaults)
 
     metrics: dict[Stage, PairMetrics] = {}
     for stage in _STAGES_IN_ORDER:

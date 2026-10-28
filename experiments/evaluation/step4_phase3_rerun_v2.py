@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import json
 
-from pvdials.config import load_defaults
 from pvdials.physics.pipeline import run_pipeline
 from pvdials.physics.shared_inputs import shared_inputs_for
 from pvdials.warning_filter import ChandrupatlaWarningFilter
@@ -31,18 +30,20 @@ import experiments.evaluation.step4_ensemble as s4
 from experiments.evaluation.chain_population import build_configs, default_hardware
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.weather_source import verify_thesis_weather_file
+from experiments.tau_calibration.run_settings import require_tau, run_defaults, run_record
 
 
 def main() -> None:
     weather_info = verify_thesis_weather_file()
     s4.log(f"Weather file verified: {weather_info}")
+    require_tau()
 
     chains = json.loads((s4.OUT_DIR / "chains.json").read_text())["chains"]
     ensemble_phase1 = json.loads((s4.OUT_DIR / "ensemble_phase1.json").read_text())
     phase1_records = ensemble_phase1["pairs"]
     s4.log(f"Loaded {len(chains)} chains and {len(phase1_records)} saved Phase 1 records (unchanged).")
 
-    defaults = load_defaults()
+    defaults = run_defaults()
     module, mounting = default_hardware()
     all_configs = {c.label: c for c in build_configs(module, mounting)}
 
@@ -65,6 +66,7 @@ def main() -> None:
         summary_filename="phase3_summary_v2.json",
         exclusions_filename="phase3_exclusions_v2.json",
         save_v_tables=True,
+        run_record=run_record(shared_cec.ctx),
     )
     s4.log("Rerun complete.")
 

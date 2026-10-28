@@ -3,7 +3,7 @@ import pytest
 
 import pvdials.dla.phase1 as phase1_module
 from pvdials.config import load_defaults
-from pvdials.dla.metrics import PairMetrics
+from pvdials.dla.metrics import PairMetrics, Tau
 from pvdials.dla.phase1 import (
     OUTCOME_COMPENSATING_DIFFERENCES,
     OUTCOME_DISAGREEMENT_FOUND,
@@ -148,6 +148,27 @@ def test_tau_is_recorded_on_the_result():
 
     assert phase1.tau.value == 0.2
     assert phase1.tau.source == "user_entered"
+
+
+def test_an_already_resolved_tau_is_used_as_is():
+    """A run's override keeps its own source label and reference -- not
+    re-resolved into "user_entered"."""
+    result_a = _baseline("A")
+    result_b = _baseline("B")
+    override = Tau(0.2, "run setting TEST_TAU", "selection.json")
+
+    phase1 = run_phase1(result_a.config, result_a, result_b.config, result_b, DAYLIGHT, tau=override)
+
+    assert phase1.tau == override
+
+
+def test_tau_and_tau_value_together_is_refused():
+    result_a = _baseline("A")
+    result_b = _baseline("B")
+
+    with pytest.raises(ValueError):
+        run_phase1(result_a.config, result_a, result_b.config, result_b, DAYLIGHT,
+                   tau_value=0.2, tau=Tau(0.2, "run setting TEST_TAU"))
 
 
 @pytest.mark.parametrize(

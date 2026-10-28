@@ -17,7 +17,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pvdials.config import load_defaults
 from pvdials.dla.metrics import stage_series
 from pvdials.dla.phase1 import run_phase1
 from pvdials.dla.phase3 import Phase3NotComputable, run_phase3
@@ -29,9 +28,10 @@ from experiments.evaluation.baselines import baseline_a_stage, baseline_b_stage
 from experiments.evaluation.comparators import averaged_game, shapley_values
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.weather_source import verify_thesis_weather_file
+from experiments.tau_calibration.run_settings import output_dir, require_tau, run_defaults, run_record
 from tests.dla.mock_adapters import install_mock_model, install_mock_temperature_model
 
-OUT_DIR = Path(__file__).resolve().parent / "outputs" / "step3"
+OUT_DIR = output_dir(Path(__file__).resolve().parent / "outputs" / "step3")
 
 CONFIG_A = PipelineConfig("A", "erbs", "isotropic", "faiman", "singlediode_cec", "sandia")
 
@@ -210,12 +210,14 @@ def case3_two_multiplicative(shared_cec, shared_adr, daylight, defaults) -> dict
 def main() -> None:
     weather_info = verify_thesis_weather_file()
     print(f"Weather file verified: {weather_info}")
+    require_tau()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    defaults = load_defaults()
+    defaults = run_defaults()
     with ChandrupatlaWarningFilter() as wf:
         shared_cec, shared_adr, daylight = _shared()
         report = {
             "weather_file": weather_info,
+            "run_record": run_record(shared_cec.ctx),
             "case1_phase1": case1_phase1(shared_cec, shared_adr, daylight, defaults),
             "case2_one_perturbed_stage": case2_one_perturbed_stage(shared_cec, shared_adr, daylight, defaults),
             "case3_two_multiplicative": case3_two_multiplicative(shared_cec, shared_adr, daylight, defaults),

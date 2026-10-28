@@ -26,12 +26,7 @@ from pathlib import Path
 from pvlib import pvsystem
 
 from pvdials.config import load_defaults
-from pvdials.data.column_mapper import (
-    TAG_USER_ENTERED,
-    TimeOffset,
-    detect_columns,
-    detect_site_metadata,
-)
+from pvdials.data.column_mapper import detect_columns, detect_site_metadata
 from pvdials.data.preprocess import preprocess
 from pvdials.data.upload import load_uploaded_csv
 from pvdials.dla.phase1 import run_phase1
@@ -54,6 +49,7 @@ from pvdials.physics.registry import (
     stage5_pool_view,
 )
 from pvdials.physics.site import SiteContext, build_site_context
+from run_settings import time_offset
 from pvdials.types import PipelineConfig
 
 REAL_FILE = Path(__file__).resolve().parents[2] / "data" / "weather" / "tmy_6.944_79.856_2005_2020.csv"
@@ -170,12 +166,7 @@ def build_experiment_context() -> ExperimentContext:
     uploaded = load_uploaded_csv(REAL_FILE)
     weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
     site = detect_site_metadata(uploaded.preamble, uploaded.table)
-    offset = TimeOffset(
-        0.0,
-        TAG_USER_ENTERED,
-        override_reason="header states 0.5 h; file day/night content aligns with 0 h",
-    )
-    ctx = build_site_context(weather, site, offset, defaults)
+    ctx = build_site_context(weather, site, time_offset(uploaded.preamble), defaults)
 
     module = load_module(CEC, MODULE_NAME)
     mounting = resolve_mounting(None, None, defaults)

@@ -20,12 +20,7 @@ from pathlib import Path
 
 import pvdials.dla.phase3 as phase3_module
 from pvdials.config import load_defaults
-from pvdials.data.column_mapper import (
-    TAG_USER_ENTERED,
-    TimeOffset,
-    detect_columns,
-    detect_site_metadata,
-)
+from pvdials.data.column_mapper import detect_columns, detect_site_metadata
 from pvdials.data.preprocess import preprocess
 from pvdials.data.upload import load_uploaded_csv
 from pvdials.dla.phase1 import _differing_stages
@@ -45,6 +40,7 @@ from pvdials.provenance.db import get_connection
 from pvdials.types import ExecutionSet, PipelineConfig
 
 from experiments.evaluation.db_safety import guard_not_dev_database, resolve_current_database_url
+from experiments.tau_calibration.run_settings import OFFSET_H, site_tau_kwargs, time_offset
 from experiments.evaluation.weather_source import THESIS_WEATHER_FILE, verify_thesis_weather_file
 
 REAL_FILE = THESIS_WEATHER_FILE
@@ -59,17 +55,19 @@ CONFIGS = {
 PAIRS = [("A", "B"), ("A", "C")]
 
 
-def _shared():
+def _shared(offset_h: float = OFFSET_H):
+    """offset_h defaults to the run's PVDIAL_OFFSET_H; offset_sensitivity.py
+    passes each offset it compares explicitly. The site context carries
+    PVDIAL_TAU as its labelled override (records written from it, e.g. R6's
+    O4 records, say where their tau came from); unset, the default as before."""
     from pvlib import pvsystem
 
     uploaded = load_uploaded_csv(REAL_FILE)
     weather = preprocess(uploaded.table, detect_columns(uploaded.table)).df
     site = detect_site_metadata(uploaded.preamble, uploaded.table)
-    offset = TimeOffset(
-        0.0, TAG_USER_ENTERED,
-        override_reason="header states 0.5 h; file day/night content aligns with 0 h",
+    ctx = build_site_context(
+        weather, site, time_offset(uploaded.preamble, offset_h), load_defaults(), **site_tau_kwargs()
     )
-    ctx = build_site_context(weather, site, offset, load_defaults())
     cec_modules = pvsystem.retrieve_sam(CEC)
     module = ModuleRecord(CEC, MODULE_NAME, cec_modules[MODULE_NAME])
     cec_inverters = pvsystem.retrieve_sam(CEC_INVERTER)

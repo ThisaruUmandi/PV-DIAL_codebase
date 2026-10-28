@@ -18,8 +18,9 @@ import itertools
 import json
 from pathlib import Path
 
+import yaml
+
 from pvdials.analysis import build_results_dict, run_analysis, write_outputs
-from pvdials.config import load_defaults
 from pvdials.dla.phase1 import _differing_stages
 from pvdials.dla.phase3 import pair_is_shapley_computable, run_phase3
 from pvdials.physics.pipeline import run_pipeline
@@ -35,10 +36,27 @@ from experiments.evaluation.comparators import (
 )
 from experiments.evaluation.step0_measure_phase3 import _shared
 from experiments.evaluation.weather_source import verify_thesis_weather_file
+from experiments.tau_calibration.run_settings import (
+    OFFSET_H,
+    TAU,
+    output_dir,
+    require_tau,
+    run_defaults,
+    run_record,
+    tau_override,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ANALYSIS_YAML = REPO_ROOT / "analysis.yaml"
-OUT_DIR = Path(__file__).resolve().parent / "outputs" / "step2"
+ANALYSIS_YAML = REPO_ROOT / ("analysis.yaml" if OFFSET_H == 0.0 else f"analysis_offset_{OFFSET_H:g}h.yaml")
+OUT_DIR = output_dir(Path(__file__).resolve().parent / "outputs" / "step2")
+
+
+def _check_yaml_offset() -> None:
+    """The production run takes its offset from the YAML, not from
+    PVDIAL_OFFSET_H -- refuse a YAML that disagrees with this run's offset."""
+    yaml_offset_h = float(yaml.safe_load(ANALYSIS_YAML.read_text())["time_offset"]["value_h"])
+    if yaml_offset_h != OFFSET_H:
+        raise SystemExit(f"STOP: {ANALYSIS_YAML.name} sets {yaml_offset_h:g} h, this run is at {OFFSET_H:g} h.")
 
 
 def _v_table_from_json(entries: list[dict]) -> dict[frozenset, float]:
@@ -56,14 +74,24 @@ def run_colombo_check() -> dict:
     averaged game, by linearity of the Shapley formula), not a coincidence.
     """
     colombo_dir = OUT_DIR / "colombo"
+    # PVDIAL_TAU reaches the production run as its own labelled override, so
+    # every provenance record says where its tau came from; unset, None.
     with ChandrupatlaWarningFilter() as wf:
-        run = run_analysis(str(ANALYSIS_YAML))
+        run = run_analysis(str(ANALYSIS_YAML), tau_override=tau_override())
     write_outputs(run, str(colombo_dir))
+    # write_outputs() is production code and doesn't carry the run record;
+    # this file beside its outputs does.
+    record = run_record(run.site_result.ctx)
+    (colombo_dir / "run_record.json").write_text(json.dumps(
+        {**record, "analysis_yaml": ANALYSIS_YAML.name, "covers": sorted(p.name for p in colombo_dir.iterdir())},
+        indent=2))
     if wf.count:
         print(f"  ({wf.count} known scipy chandrupatla 0/0 warnings suppressed)")
     results = build_results_dict(run)
+    if results["tau"]["value"] != TAU:
+        raise SystemExit(f"STOP: the production run applied tau {results['tau']['value']}, expected {TAU}.")
 
-    report = {}
+    report = {"run_record": record}
     for pair_key in ("A-B", "A-C"):
         p3 = results["phase3"][pair_key]
         v_ab = _v_table_from_json(p3["v_ab"])
@@ -112,7 +140,7 @@ def run_s2_pair_check() -> dict:
     s = sorted(_differing_stages(config_a, config_b), key=lambda s: s.value)
     print(f"First |S|=2 pair in label order: {config_a.label} vs {config_b.label}, S={[s_.name for s_ in s]}")
 
-    defaults = load_defaults()
+    defaults = run_defaults()
     shared_cec, shared_adr, daylight = _shared()
 
     shared_a = shared_inputs_for(config_a, shared_cec, shared_adr)
@@ -139,6 +167,7 @@ def run_s2_pair_check() -> dict:
         }
 
     report = {
+        "run_record": run_record(shared_cec.ctx),
         "pair": [config_a.label, config_b.label],
         "S": [i.name, j.name],
         "v_ab": _table(v_ab),
@@ -152,6 +181,8 @@ def run_s2_pair_check() -> dict:
 if __name__ == "__main__":
     weather_info = verify_thesis_weather_file()
     print(f"Weather file verified: {weather_info}")
+    _check_yaml_offset()
+    require_tau()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
     colombo_report = {"weather_file": weather_info, **run_colombo_check()}
