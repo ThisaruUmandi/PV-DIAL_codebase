@@ -88,8 +88,9 @@ def run_colombo_check() -> dict:
     if wf.count:
         print(f"  ({wf.count} known scipy chandrupatla 0/0 warnings suppressed)")
     results = build_results_dict(run)
-    if results["tau"]["value"] != TAU:
-        raise SystemExit(f"STOP: the production run applied tau {results['tau']['value']}, expected {TAU}.")
+    applied = {pair: results["phase1"][pair]["tau"]["value"] for pair in results["phase1"]}
+    if any(v != TAU for v in applied.values()):
+        raise SystemExit(f"STOP: the production run applied tau {applied}, expected {TAU}.")
 
     report = {"run_record": record}
     for pair_key in ("A-B", "A-C"):
